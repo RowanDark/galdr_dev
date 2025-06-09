@@ -18,6 +18,7 @@ from core.ai_integration import AISecurityAnalyzer
 from gui.theme_manager import ThemeManager
 from gui.project_profiles_tab import ProjectProfilesTab
 from gui.cve_monitor_tab import CVEMonitorTab
+from gui.ai_copilot_tab import AICoPilotTab
 from core.project_manager import ScanSettings, UserPreferences
 
 class MainWindow(QMainWindow):
@@ -76,6 +77,7 @@ class MainWindow(QMainWindow):
         self.append_log(f"🎨 Theme: {self.theme_manager.themes[self.theme_manager.get_current_theme()]['name']}")
         self.append_log(f"📁 Project Profiles System ready")
         self.append_log(f"🛡️ CVE Vulnerability Monitor active")
+        self.append_log(f"🤖 AI Co-pilot ready for assistance")
     
     def init_user_database(self):
         """Initialize user-specific database"""
@@ -190,6 +192,10 @@ class MainWindow(QMainWindow):
         self.cve_monitor_tab = CVEMonitorTab()
         self.cve_monitor_tab.vulnerability_detected.connect(self.handle_vulnerability_detection)
         self.tab_widget.addTab(self.cve_monitor_tab, "🛡️ CVE Monitor")
+        
+        # AI Co-pilot tab
+        self.ai_copilot_tab = AICoPilotTab(self.ai_analyzer)
+        self.tab_widget.addTab(self.ai_copilot_tab, "🤖 AI Co-pilot")
         
         # Project Profiles tab
         self.project_profiles_tab = ProjectProfilesTab(self.current_user)
@@ -421,7 +427,6 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.security_view)
 
         self.tab_widget.addTab(security_widget, "🔍 Security")
-    
     def create_menu_bar(self):
         """Create the application menu bar with theme options"""
         menubar = self.menuBar()
@@ -483,6 +488,23 @@ class MainWindow(QMainWindow):
         galdr_theme_action.triggered.connect(lambda: self.change_theme('galdr_red'))
         view_menu.addAction(galdr_theme_action)
         
+        # AI menu
+        ai_menu = menubar.addMenu("🤖 AI Assistant")
+        
+        open_copilot_action = QAction("🤖 Open AI Co-pilot", self)
+        open_copilot_action.triggered.connect(self.show_ai_copilot)
+        ai_menu.addAction(open_copilot_action)
+        
+        ai_menu.addSeparator()
+        
+        ask_ai_action = QAction("💬 Ask AI about Scan", self)
+        ask_ai_action.triggered.connect(self.quick_ask_ai_about_scan)
+        ai_menu.addAction(ask_ai_action)
+        
+        analyze_vulns_action = QAction("🔍 AI Analyze Vulnerabilities", self)
+        analyze_vulns_action.triggered.connect(self.ai_analyze_vulnerabilities)
+        ai_menu.addAction(analyze_vulns_action)
+        
         # Security menu
         security_menu = menubar.addMenu("🛡️ Security")
         
@@ -541,6 +563,21 @@ class MainWindow(QMainWindow):
         """Switch to CVE monitor tab"""
         self.tab_widget.setCurrentWidget(self.cve_monitor_tab)
     
+    def show_ai_copilot(self):
+        """Switch to AI Co-pilot tab"""
+        self.tab_widget.setCurrentWidget(self.ai_copilot_tab)
+    
+    def quick_ask_ai_about_scan(self):
+        """Quick action to ask AI about current scan"""
+        self.show_ai_copilot()
+        self.ai_copilot_tab.input_box.setText("What should I know about my current scan results?")
+        self.ai_copilot_tab.send_message()
+    
+    def ai_analyze_vulnerabilities(self):
+        """Quick action to analyze vulnerabilities with AI"""
+        self.show_ai_copilot()
+        self.ai_copilot_tab.quick_analyze_vulnerabilities()
+    
     def update_cve_database(self):
         """Trigger CVE database update"""
         self.show_cve_monitor()
@@ -582,6 +619,73 @@ class MainWindow(QMainWindow):
         """Handle vulnerability detection from CVE monitor"""
         self.append_log(f"🚨 Vulnerability detected in {technology}: {vulnerability_data}")
         self.vulnerability_status_label.setText(f"🚨 Vulnerabilities found in {technology}")
+    
+    def update_ai_copilot_context(self):
+        """Update AI Co-pilot with current scan context"""
+        try:
+            # Get current scan statistics
+            context_data = {
+                'target_url': self.url_input.text(),
+                'pages_scanned': self.get_pages_scanned_count(),
+                'technologies_count': self.get_technologies_count(),
+                'security_findings': self.get_security_findings_count(),
+                'cve_count': self.get_cve_count(),
+                'recent_activity': self.get_recent_activity(),
+                'new_findings': True  # Flag for auto-analysis
+            }
+            
+            # Update AI Co-pilot context
+            self.ai_copilot_tab.update_context(context_data)
+            
+        except Exception as e:
+            self.logger.error(f"Failed to update AI Co-pilot context: {e}")
+    
+    def get_pages_scanned_count(self):
+        """Get count of pages scanned in current session"""
+        try:
+            query = QSqlQuery(self.db)
+            query.prepare("SELECT COUNT(*) FROM results WHERE scan_session_id = ?")
+            query.addBindValue(self.session_id)
+            query.exec()
+            if query.next():
+                return query.value(0)
+        except:
+            pass
+        return 0
+    
+    def get_technologies_count(self):
+        """Get count of technologies detected in current session"""
+        try:
+            query = QSqlQuery(self.db)
+            query.prepare("SELECT COUNT(DISTINCT tech_name) FROM technologies WHERE scan_session_id = ?")
+            query.addBindValue(self.session_id)
+            query.exec()
+            if query.next():
+                return query.value(0)
+        except:
+            pass
+        return 0
+    
+    def get_security_findings_count(self):
+        """Get count of security findings in current session"""
+        try:
+            query = QSqlQuery(self.db)
+            query.prepare("SELECT COUNT(*) FROM security_findings WHERE scan_session_id = ?")
+            query.addBindValue(self.session_id)
+            query.exec()
+            if query.next():
+                return query.value(0)
+        except:
+            pass
+        return 0
+    
+    def get_cve_count(self):
+        """Get count of CVE vulnerabilities found"""
+        return 0  # Placeholder
+    
+    def get_recent_activity(self):
+        """Get recent activity summary"""
+        return f"Last scan: {self.session_id[:8]}..."
     
     def load_profile_settings(self, settings_dict):
         """Load settings from a project profile"""
@@ -651,7 +755,6 @@ class MainWindow(QMainWindow):
     
     def on_settings_changed(self):
         """Called when any setting changes"""
-        # This could be used to mark profile as modified
         pass
     
     def change_theme(self, theme_name):
@@ -666,7 +769,6 @@ class MainWindow(QMainWindow):
     def show_context_menu(self, position):
         """Show context menu for results table with debugging"""
         try:
-            # Check if we have a valid selection
             index = self.table_view.indexAt(position)
             if not index.isValid():
                 self.append_log("⚠️ Right-click position not on valid table item")
@@ -677,7 +779,6 @@ class MainWindow(QMainWindow):
             send_to_repeater_action.triggered.connect(self.send_to_repeater)
             menu.addAction(send_to_repeater_action)
             
-            # Add debug info action
             debug_action = QAction("🔍 Debug Row Info", self)
             debug_action.triggered.connect(lambda: self.debug_row_info(index.row()))
             menu.addAction(debug_action)
@@ -713,13 +814,10 @@ class MainWindow(QMainWindow):
         
         try:
             row = selected_indexes[0].row()
-            
-            # Get URL from the correct column (column 1 should be URL)
-            url_index = self.table_model.index(row, 1)  # Column 1 = URL
+            url_index = self.table_model.index(row, 1)
             url = self.table_model.data(url_index, Qt.ItemDataRole.DisplayRole)
             
             if not url:
-                # Try different column if URL is not in column 1
                 for col in range(self.table_model.columnCount()):
                     test_index = self.table_model.index(row, col)
                     test_data = self.table_model.data(test_index, Qt.ItemDataRole.DisplayRole)
@@ -761,7 +859,6 @@ class MainWindow(QMainWindow):
     def update_ai_settings(self, settings):
         """Update AI analyzer settings"""
         try:
-            # Configure AI analyzer based on settings
             if settings.get('foundation_enabled', True):
                 self.ai_analyzer.set_provider('foundation-sec-8b')
                 self.append_log("🤖 AI Provider: Foundation-sec-8B (Local)")
@@ -780,6 +877,16 @@ class MainWindow(QMainWindow):
                                             settings.get('deepseek_model'), 
                                             settings['api_keys']['deepseek'])
                 self.append_log(f"🤖 AI Provider: DeepSeek {settings.get('deepseek_model')}")
+            elif settings.get('gemini_enabled') and settings.get('api_keys', {}).get('gemini'):
+                self.ai_analyzer.set_provider('gemini', 
+                                            settings.get('gemini_model'), 
+                                            settings['api_keys']['gemini'])
+                self.append_log(f"🤖 AI Provider: Google Gemini {settings.get('gemini_model')}")
+            elif settings.get('grok_enabled') and settings.get('api_keys', {}).get('grok'):
+                self.ai_analyzer.set_provider('grok', 
+                                            settings.get('grok_model'), 
+                                            settings['api_keys']['grok'])
+                self.append_log(f"🤖 AI Provider: xAI Grok {settings.get('grok_model')}")
             elif settings.get('ollama_enabled'):
                 self.ai_analyzer.set_provider('ollama', settings.get('ollama_model'))
                 self.append_log(f"🤖 AI Provider: Ollama {settings.get('ollama_model')}")
@@ -792,7 +899,6 @@ class MainWindow(QMainWindow):
     def run_ai_analysis(self):
         """Run AI analysis on current security findings"""
         try:
-            # Get security findings from database
             query = QSqlQuery(self.db)
             query.exec("SELECT * FROM security_findings ORDER BY timestamp DESC LIMIT 25")
             
@@ -820,7 +926,6 @@ class MainWindow(QMainWindow):
             
             self.append_log(f"🤖 Starting AI analysis of {len(findings)} security findings...")
             
-            # Run AI analysis asynchronously
             import asyncio
             asyncio.create_task(self.perform_ai_analysis(findings))
             
@@ -833,7 +938,6 @@ class MainWindow(QMainWindow):
         try:
             results = await self.ai_analyzer.analyze_findings(findings)
             
-            # Update database with AI analysis results
             for i, result in enumerate(results):
                 if 'error' not in result:
                     finding_id = findings[i]['id']
@@ -845,9 +949,7 @@ class MainWindow(QMainWindow):
                     update_query.addBindValue(finding_id)
                     update_query.exec()
             
-            # Refresh security findings table
             self.security_model.select()
-            
             self.append_log(f"✅ AI analysis completed for {len(results)} findings")
             
         except Exception as e:
@@ -861,7 +963,6 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Input Error", "Please enter a target URL")
             return
         
-        # Validate URL format
         if not url.startswith(('http://', 'https://')):
             url = 'https://' + url
             self.url_input.setText(url)
@@ -874,7 +975,6 @@ class MainWindow(QMainWindow):
         enable_passive_scan = self.passive_scan_check.isChecked()
         enable_cve_analysis = self.cve_analysis_check.isChecked()
         
-        # Record scan start time for profile history
         self.scan_start_time = time.time()
         
         self.append_log(f"🚀 Starting crawl of {url} (depth: {depth})")
@@ -884,16 +984,13 @@ class MainWindow(QMainWindow):
         if enable_cve_analysis:
             self.append_log("🛡️ CVE vulnerability analysis enabled")
         
-        # Reset vulnerability status
         self.vulnerability_status_label.setText("🛡️ CVE Status: Scanning...")
         
-        # Create and configure crawler with enhanced options
         self.crawler = AdvancedCrawler(
             url, depth, headless, delay, 
             enable_screenshots, enable_subdomain_enum, enable_passive_scan
         )
         
-        # Connect crawler signals
         self.crawler.update_signal.connect(self.update_results)
         self.crawler.tech_signal.connect(self.update_tech_display)
         self.crawler.log_signal.connect(self.append_log)
@@ -903,10 +1000,8 @@ class MainWindow(QMainWindow):
         self.crawler.subdomain_found.connect(self.handle_subdomain_found)
         self.crawler.security_finding.connect(self.handle_security_finding)
         
-        # Start crawler
         self.crawler.start()
         
-        # Update UI state
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
         self.save_user_settings()
@@ -924,7 +1019,6 @@ class MainWindow(QMainWindow):
     def update_results(self, page_data):
         """Update results table with crawled page data"""
         try:
-            # Debug logging
             self.logger.info(f"Attempting to insert: {page_data['url']}")
             
             query = QSqlQuery(self.db)
@@ -946,7 +1040,6 @@ class MainWindow(QMainWindow):
                 self.logger.error(f"Failed to insert result: {error_msg}")
                 self.append_log(f"❌ Database error: {error_msg}")
             else:
-                # Refresh table view
                 self.table_model.select()
                 self.logger.info(f"Successfully inserted: {page_data['url']}")
                 
@@ -961,7 +1054,6 @@ class MainWindow(QMainWindow):
             url = finding_data['url']
             finding = finding_data['finding']
             
-            # Store in database
             query = QSqlQuery(self.db)
             query.prepare("""
                 INSERT INTO security_findings 
@@ -981,7 +1073,6 @@ class MainWindow(QMainWindow):
             query.addBindValue(self.session_id)
             
             if query.exec():
-                # Refresh security findings table
                 self.security_model.select()
             else:
                 self.logger.error(f"Failed to store security finding: {query.lastError().text()}")
@@ -991,8 +1082,7 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(dict)
     def update_tech_display(self, tech_data):
-        """Enhanced display for per-page technology detection with CVE analysis"""
-        # Handle both old format (just technologies) and new format (with URL)
+        """Enhanced display for per-page technology detection with AI Co-pilot updates"""
         if 'url' in tech_data:
             url = tech_data['url']
             technologies = tech_data['technologies']
@@ -1013,21 +1103,19 @@ class MainWindow(QMainWindow):
                     summary += f" - {len(vulns)} CVEs"
                 tech_summary.append(summary)
                 
-                # Store in database with URL context
                 self.store_technology_data_with_url(url, tech, info, depth)
             
             if tech_summary:
-                # Show shortened URL for cleaner logs
                 short_url = url if len(url) <= 50 else url[:47] + "..."
                 self.append_log(f"🔧 Technologies on {short_url}:")
                 for summary in tech_summary:
                     self.append_log(summary)
                 
-                # Auto-analyze for CVEs if enabled
                 if self.cve_analysis_check.isChecked():
                     self.cve_monitor_tab.analyze_technologies(technologies)
+                
+                self.update_ai_copilot_context()
         else:
-            # Handle old format for backward compatibility
             if not tech_data:
                 self.append_log("🔧 No technologies detected")
                 return
@@ -1044,7 +1132,6 @@ class MainWindow(QMainWindow):
                     summary += f" - {len(vulns)} CVEs"
                 tech_summary.append(summary)
                 
-                # Store in database
                 self.store_technology_data(tech, info)
             
             self.append_log("🔧 Technologies detected:")
@@ -1059,7 +1146,7 @@ class MainWindow(QMainWindow):
                 INSERT INTO technologies (url, tech_name, version, confidence, risk_level, depth, detection_method, timestamp, scan_session_id) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """)
-            query.addBindValue(url)  # Use the specific URL where tech was found
+            query.addBindValue(url)
             query.addBindValue(tech_name)
             query.addBindValue(tech_info.get('version', ''))
             query.addBindValue(tech_info.get('confidence', 0))
@@ -1070,8 +1157,6 @@ class MainWindow(QMainWindow):
             query.addBindValue(self.session_id)
             
             query.exec()
-            
-            # Refresh technology table
             self.tech_model.select()
             
         except Exception as e:
@@ -1090,14 +1175,12 @@ class MainWindow(QMainWindow):
             query.addBindValue(tech_info.get('version', ''))
             query.addBindValue(tech_info.get('confidence', 0))
             query.addBindValue(tech_info.get('risk_level', 'unknown'))
-            query.addBindValue(0)  # Root level
+            query.addBindValue(0)
             query.addBindValue('legacy_detection')
             query.addBindValue(int(time.time()))
             query.addBindValue(self.session_id)
             
             query.exec()
-            
-            # Refresh technology table
             self.tech_model.select()
             
         except Exception as e:
@@ -1117,7 +1200,7 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot()
     def crawl_finished(self):
-        """Handle crawl completion with profile history tracking and CVE analysis"""
+        """Handle crawl completion with AI Co-pilot context update"""
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         
@@ -1131,7 +1214,6 @@ class MainWindow(QMainWindow):
             self.append_log(f"   🔍 Security findings: {stats.get('security_findings_total', 0)}")
             self.append_log(f"   📡 HTTP requests: {stats['requests_made']}")
             
-            # Show security findings breakdown
             findings_by_severity = stats.get('security_findings_by_severity', {})
             if findings_by_severity:
                 self.append_log("   🔍 Security findings breakdown:")
@@ -1139,12 +1221,12 @@ class MainWindow(QMainWindow):
                     emoji = {'critical': '🚨', 'high': '🔴', 'medium': '🟡', 'low': '🟢', 'info': 'ℹ️'}.get(severity, '🔍')
                     self.append_log(f"      {emoji} {severity.title()}: {count}")
             
-            # Run final CVE analysis if enabled
             if self.cve_analysis_check.isChecked() and stats['technologies_found'] > 0:
                 self.append_log("🛡️ Running final CVE vulnerability analysis...")
                 self.analyze_technologies_for_cves()
             
-            # Add scan to profile history if we have an active profile
+            self.update_ai_copilot_context()
+            
             if self.project_profiles_tab.project_manager.current_profile and self.scan_start_time:
                 duration = time.time() - self.scan_start_time
                 self.project_profiles_tab.add_scan_to_current_profile(
@@ -1205,7 +1287,6 @@ class MainWindow(QMainWindow):
             if query.exec("DELETE FROM technologies"):
                 self.tech_model.select()
                 self.append_log("🗑️ Technologies table cleared")
-                # Clear CVE analysis too
                 self.cve_monitor_tab.clear_vulnerability_data()
             else:
                 self.append_log(f"❌ Failed to clear technologies: {query.lastError().text()}")
@@ -1228,7 +1309,7 @@ class MainWindow(QMainWindow):
                 self.append_log(f"❌ Failed to clear security findings: {query.lastError().text()}")
     
     def reset_database(self):
-        """Reset database for testing - removes all tables and recreates them"""
+        """Reset database for testing"""
         reply = QMessageBox.question(self, "Reset Database", 
                                    "⚠️ Are you sure you want to reset the entire database?\n\n"
                                    "This will delete ALL data and cannot be undone.",
@@ -1243,10 +1324,8 @@ class MainWindow(QMainWindow):
                 query.exec("DROP TABLE IF EXISTS crawl_history")
                 query.exec("DROP TABLE IF EXISTS security_findings")
                 
-                # Recreate tables
                 self.create_user_tables()
                 
-                # Refresh models
                 self.table_model.setTable("results")
                 self.table_model.select()
                 self.tech_model.setTable("technologies")
@@ -1254,7 +1333,6 @@ class MainWindow(QMainWindow):
                 self.security_model.setTable("security_findings")
                 self.security_model.select()
                 
-                # Clear CVE data
                 self.cve_monitor_tab.clear_vulnerability_data()
                 self.vulnerability_status_label.setText("🛡️ CVE Status: Ready")
                 
@@ -1272,7 +1350,6 @@ class MainWindow(QMainWindow):
         )
         if filename:
             self.append_log(f"📁 Results exported to {filename}")
-            # TODO: Implement actual export logic
     
     @pyqtSlot()
     def run_sql_query(self):
@@ -1312,7 +1389,6 @@ class MainWindow(QMainWindow):
             self.tech_model.select()
             self.security_model.select()
             
-            # Clear CVE data
             self.cve_monitor_tab.clear_vulnerability_data()
             self.vulnerability_status_label.setText("🛡️ CVE Status: Ready")
             
@@ -1324,7 +1400,6 @@ class MainWindow(QMainWindow):
         about_dialog = QMessageBox(self)
         about_dialog.setWindowTitle("About Galdr")
         
-        # Set logo as icon
         try:
             icon = QIcon("assets/galdr_logo.png")
             about_dialog.setIconPixmap(icon.pixmap(64, 64))
@@ -1343,7 +1418,8 @@ class MainWindow(QMainWindow):
             f"Theme: {current_theme}\n"
             f"Per-Page Tech Detection: Enabled\n"
             f"Project Profiles: Active\n"
-            f"CVE Vulnerability Monitor: Active"
+            f"CVE Vulnerability Monitor: Active\n"
+            f"AI Co-pilot: Ready"
         )
         about_dialog.exec()
     
@@ -1352,32 +1428,29 @@ class MainWindow(QMainWindow):
         import time
         timestamp = time.strftime("%H:%M:%S")
         
-        # Color coding based on message type
         if "🚨" in message or "❌" in message:
-            color = "#ff6b6b"  # Red for errors/alerts
+            color = "#ff6b6b"
         elif "✅" in message or "🚀" in message:
-            color = "#4caf50"  # Green for success
+            color = "#4caf50"
         elif "⚠️" in message:
-            color = "#ff9800"  # Orange for warnings
+            color = "#ff9800"
         elif "🤖" in message:
-            color = "#9c27b0"  # Purple for AI
+            color = "#9c27b0"
         elif "🔍" in message:
-            color = "#2196f3"  # Blue for security
+            color = "#2196f3"
         elif "🎨" in message:
-            color = "#e91e63"  # Pink for themes
+            color = "#e91e63"
         elif "📁" in message:
-            color = "#ff9800"  # Orange for projects
+            color = "#ff9800"
         elif "🛡️" in message:
-            color = "#f44336"  # Red for CVE/security
+            color = "#f44336"
         else:
-            # Use theme-aware default color
             theme_colors = self.theme_manager.get_theme_colors()
             color = theme_colors.get('primary', '#00ff41')
         
         formatted_message = f'<span style="color: {color};">[{timestamp}] {message}</span>'
         self.log_area.append(formatted_message)
         
-        # Auto-scroll to bottom
         cursor = self.log_area.textCursor()
         cursor.movePosition(cursor.MoveOperation.End)
         self.log_area.setTextCursor(cursor)
@@ -1406,10 +1479,9 @@ class MainWindow(QMainWindow):
     
     def closeEvent(self, event):
         """Handle application close"""
-        # Stop any running crawlers
         if hasattr(self, 'crawler') and self.crawler and self.crawler.isRunning():
             self.crawler.stop()
-            self.crawler.wait(5000)  # Wait up to 5 seconds
+            self.crawler.wait(5000)
         
         self.save_user_settings()
         self.append_log(f"👋 Goodbye, {self.current_user}!")
