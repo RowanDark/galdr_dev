@@ -1,0 +1,434 @@
+# Enhanced Galdr Technology Detection Patterns
+# Comprehensive patterns for modern web technologies with fixed regex patterns
+
+cloudflare:
+  headers:
+    server: "cloudflare"
+    cf-ray: ".*"
+    cf-cache-status: ".*"
+  html:
+    - "cf-ray"
+    - "__cf_bm"
+    - "cloudflare"
+  cookies:
+    - "__cfduid"
+    - "__cf_bm"
+    - "cf_clearance"
+  version_patterns:
+    server: "cloudflare(?:/([0-9.]+))?"
+
+angular:
+  html:
+    - "ng-app"
+    - "ng-controller"
+    - "ng-version"
+    - "data-ng-"
+    - "angular\\.min\\.js"
+    - "angular\\.js"
+  scripts:
+    - "angular\\.min\\.js"
+    - "angular\\.js"
+    - "@angular/core"
+  version_patterns:
+    html: "ng-version=\"([0-9.]+)\""
+    scripts: "angular(?:\\.min)?\\.js.*?([0-9.]+)"
+
+react:
+  html:
+    - "data-reactroot"
+    - "data-react-"
+    - "__REACT_DEVTOOLS_GLOBAL_HOOK__"
+    - "react-dom"
+  scripts:
+    - "react\\.production\\.min\\.js"
+    - "react-dom\\.production\\.min\\.js"
+    - "react\\.development\\.js"
+    - "react\\.min\\.js"
+  version_patterns:
+    scripts: "react(?:\\.production|\\.development)?\\.(?:min\\.)?js.*?([0-9.]+)"
+    html: "React.*?([0-9.]+)"
+
+vue:
+  html:
+    - "data-v-"
+    - "__VUE__"
+    - "v-if"
+    - "v-for"
+    - "vue\\.min\\.js"
+  scripts:
+    - "vue\\.min\\.js"
+    - "vue\\.js"
+    - "vue\\.runtime\\.min\\.js"
+  version_patterns:
+    scripts: "vue(?:\\.runtime)?(?:\\.min)?\\.js.*?([0-9.]+)"
+    html: "Vue.*?([0-9.]+)"
+
+nextjs:
+  html:
+    - "__NEXT_DATA__"
+    - "_next/static"
+    - "next\\.js"
+  scripts:
+    - "_next/static"
+    - "next/dist"
+  version_patterns:
+    html: "Next\\.js.*?([0-9.]+)"
+    scripts: "next.*?([0-9.]+)"
+
+nuxtjs:
+  html:
+    - "__NUXT__"
+    - "_nuxt/"
+    - "nuxt\\.js"
+  scripts:
+    - "_nuxt/"
+    - "nuxt\\.js"
+  version_patterns:
+    html: "Nuxt.*?([0-9.]+)"
+
+tailwindcss:
+  html:
+    - "tailwindcss"
+    - "tw-"
+  scripts:
+    - "tailwind"
+  version_patterns:
+    html: "tailwindcss.*?([0-9.]+)"
+
+bootstrap:
+  html:
+    - "bootstrap\\.min\\.css"
+    - "bootstrap\\.css"
+    - "btn-primary"
+    - "container-fluid"
+  scripts:
+    - "bootstrap\\.min\\.js"
+    - "bootstrap\\.js"
+  version_patterns:
+    html: "Bootstrap.*?([0-9.]+)"
+    scripts: "bootstrap(?:\\.min)?\\.js.*?([0-9.]+)"
+
+express:
+  headers:
+    x-powered-by: "Express"
+  version_patterns:
+    x-powered-by: "Express/([0-9.]+)"
+
+fastapi:
+  headers:
+    server: "uvicorn"
+  html:
+    - "FastAPI"
+    - "/docs"
+    - "/redoc"
+
+django:
+  html:
+    - "csrfmiddlewaretoken"
+    - "django"
+  cookies:
+    - "csrftoken"
+    - "sessionid"
+    - "django_session"
+  headers:
+    x-frame-options: "DENY"
+
+laravel:
+  html:
+    - "laravel_session"
+    - "_token"
+  cookies:
+    - "laravel_session"
+    - "XSRF-TOKEN"
+
+aws:
+  headers:
+    server: "AmazonS3"
+    x-amz-request-id: ".*"
+  html:
+    - "amazonaws\\.com"
+    - "cloudfront"
+
+docker:
+  headers:
+    server: "nginx/.*\\(docker\\)"
+  html:
+    - "docker"
+
+kubernetes:
+  headers:
+    server: "nginx-ingress"
+  html:
+    - "kubernetes"
+
+redis:
+  headers:
+    x-redis-version: ".*"
+
+mongodb:
+  html:
+    - "mongodb"
+    - "mongo"
+
+mysql:
+  headers:
+    x-mysql-version: ".*"
+
+postgresql:
+  html:
+    - "postgresql"
+    - "postgres"
+
+elasticsearch:
+  headers:
+    x-elastic-product: "Elasticsearch"
+  html:
+    - "elasticsearch"
+
+grafana:
+  html:
+    - "grafana"
+    - "Grafana"
+  scripts:
+    - "grafana"
+
+prometheus:
+  html:
+    - "prometheus"
+    - "Prometheus"
+
+jenkins:
+  html:
+    - "jenkins"
+    - "Jenkins"
+  headers:
+    x-jenkins: ".*"
+
+gitlab:
+  html:
+    - "gitlab"
+    - "GitLab"
+
+github:
+  html:
+    - "github"
+    - "GitHub"
+
+bitbucket:
+  html:
+    - "bitbucket"
+    - "Bitbucket"
+
+jira:
+  html:
+    - "jira"
+    - "JIRA"
+    - "atlassian"
+
+confluence:
+  html:
+    - "confluence"
+    - "Confluence"
+
+slack:
+  html:
+    - "slack"
+    - "Slack"
+
+discord:
+  html:
+    - "discord"
+    - "Discord"
+
+stripe:
+  html:
+    - "stripe"
+    - "Stripe"
+  scripts:
+    - "js\\.stripe\\.com"
+
+paypal:
+  html:
+    - "paypal"
+    - "PayPal"
+  scripts:
+    - "paypal"
+
+google_analytics:
+  html:
+    - "google-analytics"
+    - "gtag"
+    - "ga\\("
+  scripts:
+    - "googletagmanager"
+    - "google-analytics"
+
+google_tag_manager:
+  html:
+    - "googletagmanager"
+    - "GTM-"
+  scripts:
+    - "googletagmanager"
+
+facebook_pixel:
+  html:
+    - "facebook\\.net"
+    - "fbq\\("
+  scripts:
+    - "connect\\.facebook\\.net"
+
+hotjar:
+  html:
+    - "hotjar"
+  scripts:
+    - "hotjar"
+
+intercom:
+  html:
+    - "intercom"
+    - "Intercom"
+  scripts:
+    - "intercom"
+
+zendesk:
+  html:
+    - "zendesk"
+    - "Zendesk"
+
+hubspot:
+  html:
+    - "hubspot"
+    - "HubSpot"
+  scripts:
+    - "hubspot"
+
+salesforce:
+  html:
+    - "salesforce"
+    - "Salesforce"
+
+shopify:
+  html:
+    - "shopify"
+    - "Shopify"
+    - "cdn\\.shopify\\.com"
+
+woocommerce:
+  html:
+    - "woocommerce"
+    - "WooCommerce"
+
+magento:
+  html:
+    - "magento"
+    - "Magento"
+
+prestashop:
+  html:
+    - "prestashop"
+    - "PrestaShop"
+
+drupal:
+  html:
+    - "drupal"
+    - "Drupal"
+  headers:
+    x-drupal-cache: ".*"
+
+joomla:
+  html:
+    - "joomla"
+    - "Joomla"
+
+typo3:
+  html:
+    - "typo3"
+    - "TYPO3"
+
+contentful:
+  html:
+    - "contentful"
+    - "Contentful"
+
+strapi:
+  html:
+    - "strapi"
+    - "Strapi"
+
+ghost:
+  html:
+    - "ghost"
+    - "Ghost"
+
+jekyll:
+  html:
+    - "jekyll"
+    - "Jekyll"
+
+gatsby:
+  html:
+    - "gatsby"
+    - "Gatsby"
+  scripts:
+    - "gatsby"
+
+hugo:
+  html:
+    - "hugo"
+    - "Hugo"
+
+netlify:
+  headers:
+    server: "Netlify"
+  html:
+    - "netlify"
+
+vercel:
+  headers:
+    server: "Vercel"
+  html:
+    - "vercel"
+
+heroku:
+  headers:
+    server: "Heroku"
+  html:
+    - "heroku"
+
+jquery:
+  scripts:
+    - "jquery\\.min\\.js"
+    - "jquery\\.js"
+  html:
+    - "jQuery JavaScript Library"
+  version_patterns:
+    scripts: "jquery[.-]([0-9.]+)"
+    html: "jQuery.*?([0-9.]+)"
+
+wordpress:
+  html:
+    - "wp-content"
+    - "wp-includes"
+    - "wp-admin"
+  headers:
+    x-powered-by: "WordPress"
+  version_patterns:
+    html: "WordPress.*?([0-9.]+)"
+
+apache:
+  headers:
+    server: "Apache"
+  version_patterns:
+    server: "Apache/([0-9.]+)"
+
+nginx:
+  headers:
+    server: "nginx"
+  version_patterns:
+    server: "nginx/([0-9.]+)"
+
+iis:
+  headers:
+    server: "Microsoft-IIS"
+  version_patterns:
+    server: "Microsoft-IIS/([0-9.]+)"

@@ -1,0 +1,28 @@
+{
+  "profile_name": "Test Company",
+  "description": "Super Description",
+  "created_at": 1749425269.1902096,
+  "last_modified": 1749425269.1902144,
+  "scan_settings": {
+    "target_url": "",
+    "depth": 2,
+    "headless": true,
+    "delay": 1.0,
+    "enable_screenshots": true,
+    "enable_subdomain_enum": false,
+    "enable_passive_scan": true,
+    "use_proxies": false,
+    "region_filter": []
+  },
+  "user_preferences": {
+    "theme": "dark",
+    "ai_settings": {},
+    "proxy_settings": {}
+  },
+  "scan_history": [],
+  "tags": [
+    "Bug Bounty",
+    "API",
+    "Bug Crows"
+  ]
+}

