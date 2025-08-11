@@ -5,6 +5,7 @@ from galdr.scanner.checks.sqli_check import SqliCheck
 from galdr.scanner.checks.xss_check import XssCheck
 from galdr.scanner.checks.command_injection_check import CommandInjectionCheck
 from galdr.scanner.checks.ssrf_check import SsrfCheck
+from galdr.scanner.checks.idor_check import IdorCheck
 from PyQt6.QtCore import QObject, pyqtSignal, QThread
 
 class ActiveScanner(QThread):
@@ -17,7 +18,7 @@ class ActiveScanner(QThread):
         self.ai_mode = ai_mode
         self.ai_analyzer = ai_analyzer
         self.running = False
-        self.checks_to_run = [SqliCheck, XssCheck, CommandInjectionCheck, SsrfCheck] # A list of check classes to run
+        self.checks_to_run = [SqliCheck, XssCheck, CommandInjectionCheck, SsrfCheck, IdorCheck] # A list of check classes to run
         print(f"Active Scanner initialized. AI Mode: {self.ai_mode}")
 
     def run(self):
