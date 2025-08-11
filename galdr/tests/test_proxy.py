@@ -38,6 +38,33 @@ class TestMitmProxy(unittest.TestCase):
         except requests.exceptions.ProxyError as e:
             self.fail(f"Proxy request failed: {e}")
 
+    def test_proxy_https_get_request(self):
+        """Test that the proxy correctly handles an HTTPS GET request via MITM."""
+        from galdr.proxy import cert_utils
+
+        # Ensure the CA cert exists, so we can trust it
+        cert_utils.get_ca_certificate()
+        ca_path = str(cert_utils.CA_CERT_PATH)
+
+        proxies = {
+            "http": f"http://{self.proxy_host}:{self.proxy_port}",
+            "https": f"http://{self.proxy_host}:{self.proxy_port}",
+        }
+        target_url = "https://httpbin.org/get"
+
+        try:
+            # Use verify=ca_path to make requests trust our custom CA
+            response = requests.get(target_url, proxies=proxies, timeout=15, verify=ca_path)
+
+            self.assertEqual(response.status_code, 200)
+            data = response.json()
+            self.assertEqual(data['url'], target_url)
+
+        except requests.exceptions.ProxyError as e:
+            self.fail(f"HTTPS Proxy request failed: {e}")
+        except requests.exceptions.SSLError as e:
+            self.fail(f"HTTPS SSL validation failed: {e}")
+
     def test_proxy_post_request(self):
         """Test that the proxy correctly handles a POST request with a body."""
         proxies = {

@@ -1,10 +1,12 @@
+import shutil
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QTableWidget,
-    QTableWidgetItem, QHeaderView, QTextEdit, QGroupBox
+    QTableWidgetItem, QHeaderView, QTextEdit, QGroupBox, QFileDialog, QMessageBox
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 from galdr.proxy.mitm_proxy import MitmProxy
+from galdr.proxy import cert_utils
 
 class ProxyTab(QWidget):
     def __init__(self, parent=None):
@@ -12,6 +14,10 @@ class ProxyTab(QWidget):
         self.proxy_thread = None
         self.proxy_host = '127.0.0.1'
         self.proxy_port = 8080
+
+        # Ensure CA certificate exists before UI is initialized
+        cert_utils.get_ca_certificate()
+
         self.init_ui()
 
     def init_ui(self):
@@ -32,6 +38,10 @@ class ProxyTab(QWidget):
         controls_layout.addWidget(self.proxy_status_label)
 
         controls_layout.addStretch()
+
+        self.export_ca_button = QPushButton("📜 Export Galdr CA")
+        self.export_ca_button.clicked.connect(self.export_ca_cert)
+        controls_layout.addWidget(self.export_ca_button)
 
         controls_group.setLayout(controls_layout)
         layout.addWidget(controls_group)
@@ -62,20 +72,35 @@ class ProxyTab(QWidget):
         instructions_text.setReadOnly(True)
         instructions_text.setFont(QFont("Courier", 9))
         instructions_text.setHtml(f"""
-            <p>To start intercepting traffic:</p>
+            <p><b>To intercept HTTPS traffic, you must first install the Galdr CA certificate in your browser.</b></p>
             <ol>
-                <li>Click the <b>'Start Proxy'</b> button above.</li>
-                <li>Configure your web browser to use an HTTP proxy with the address <strong>{self.proxy_host}</strong> and port <strong>{self.proxy_port}</strong>.</li>
-                <li>For HTTPS traffic, you will need to install a CA certificate (coming in a future update). For now, this proxy only supports HTTP.</li>
-                <li>Once configured, all HTTP traffic from your browser will appear in the table above.</li>
+                <li>Click the <b>'Export Galdr CA'</b> button above and save the `galdr_ca.pem` file.</li>
+                <li>Go to your browser's settings, find the certificate manager (usually under Security or Privacy), and import the `galdr_ca.pem` file into the "Authorities" or "Trusted Root Certification Authorities" tab.</li>
+                <li>Click the <b>'Start Proxy'</b> button.</li>
+                <li>Configure your browser to use an HTTP proxy at <strong>{self.proxy_host}</strong> on port <strong>{self.proxy_port}</strong>.</li>
+                <li>All HTTP and HTTPS traffic from your browser will now appear in the table.</li>
             </ol>
-            <p><b>Note:</b> This is a basic implementation. Features like interception, modification, and full HTTPS support are under development.</p>
         """)
         instructions_layout.addWidget(instructions_text)
         instructions_group.setLayout(instructions_layout)
         layout.addWidget(instructions_group, 1) # Give less stretch to this
 
         self.setLayout(layout)
+
+    def export_ca_cert(self):
+        """Handle exporting the CA certificate."""
+        default_path = str(cert_utils.CA_CERT_PATH.home() / "galdr_ca.pem")
+        filename, _ = QFileDialog.getSaveFileName(
+            self, "Export Galdr CA Certificate", default_path,
+            "PEM Files (*.pem);;All Files (*)"
+        )
+        if filename:
+            try:
+                shutil.copy(cert_utils.CA_CERT_PATH, filename)
+                QMessageBox.information(self, "Export Successful",
+                                      f"Galdr CA certificate successfully exported to:\n{filename}")
+            except Exception as e:
+                QMessageBox.critical(self, "Export Failed", f"Could not export certificate: {e}")
 
     def toggle_proxy(self, checked):
         """Starts or stops the proxy server."""
