@@ -1,0 +1,7 @@
+; sleep 5
+| sleep 5
+&& sleep 5
+`sleep 5`
+$(sleep 5)
+| ping -c 5 127.0.0.1
+; ping -c 5 127.0.0.1
