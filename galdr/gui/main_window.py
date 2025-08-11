@@ -216,6 +216,11 @@ class MainWindow(QMainWindow):
         self.decoder_tab = DecoderTab()
         self.tab_widget.addTab(self.decoder_tab, "🔡 Decoder")
 
+        # Comparer tab
+        from gui.comparer_tab import ComparerTab
+        self.comparer_tab = ComparerTab()
+        self.tab_widget.addTab(self.comparer_tab, "↔️ Comparer")
+
         # Proxy tab
         from gui.proxy_tab import ProxyTab
         self.proxy_tab = ProxyTab(repeater_tab=self.repeater_tab, main_window=self)

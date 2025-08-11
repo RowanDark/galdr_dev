@@ -55,3 +55,16 @@ def smart_decode(text: str) -> str:
         pass
 
     return "Could not automatically decode the input."
+
+import difflib
+
+def generate_diff(text1: str, text2: str) -> list:
+    """Generates a unified diff between two texts."""
+    diff = list(difflib.unified_diff(
+        text1.splitlines(keepends=True),
+        text2.splitlines(keepends=True),
+        fromfile='Text 1',
+        tofile='Text 2',
+        n=3
+    ))
+    return diff

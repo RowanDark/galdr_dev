@@ -302,32 +302,11 @@ class RepeaterTab(QWidget):
         self.display_colored_diff(diff)
         self.response_tabs.setCurrentIndex(1)  # Switch to comparison tab
     
+from galdr.utils.ui_utils import display_colored_diff
+
     def display_colored_diff(self, diff_lines):
         """Display diff with color highlighting"""
-        self.comparison_viewer.clear()
-        cursor = self.comparison_viewer.textCursor()
-        
-        # Define formats
-        added_format = QTextCharFormat()
-        added_format.setBackground(QColor(46, 125, 50))
-        added_format.setForeground(QColor(255, 255, 255))
-        
-        removed_format = QTextCharFormat()
-        removed_format.setBackground(QColor(183, 28, 28))
-        removed_format.setForeground(QColor(255, 255, 255))
-        
-        context_format = QTextCharFormat()
-        context_format.setForeground(QColor(117, 117, 117))
-        
-        for line in diff_lines:
-            if line.startswith('+'):
-                cursor.setCharFormat(added_format)
-            elif line.startswith('-'):
-                cursor.setCharFormat(removed_format)
-            else:
-                cursor.setCharFormat(context_format)
-            
-            cursor.insertText(line)
+        display_colored_diff(self.comparison_viewer, diff_lines)
     
     def save_as_original(self):
         """Save current response as original for comparison"""
