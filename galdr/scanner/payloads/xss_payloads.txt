@@ -1,0 +1,5 @@
+<galdr_xss_test>
+galdr_scan_tag'
+galdr_scan_tag"
+<script>galdr_test()</script>
+'"><galdr_tag>
