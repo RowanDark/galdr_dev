@@ -3,35 +3,57 @@ import queue
 
 class InterceptManager:
     """
-    Manages the state for request interception between the GUI and proxy threads.
+    Manages the state for request/response interception between the GUI and proxy threads.
     """
     def __init__(self):
-        self.intercept_enabled = False
-        self.event = threading.Event()
-        self.data_queue = queue.Queue()
+        # State flags
+        self.intercept_request_enabled = False
+        self.intercept_response_enabled = False
 
-    def is_intercept_on(self):
-        return self.intercept_enabled
+        # For requests
+        self.request_event = threading.Event()
+        self.request_queue = queue.Queue(maxsize=1)
 
-    def toggle_intercept(self, status: bool):
-        self.intercept_enabled = status
+        # For responses
+        self.response_event = threading.Event()
+        self.response_queue = queue.Queue(maxsize=1)
 
-    def wait_for_gui(self):
-        """Called by the proxy thread to block until the GUI responds."""
-        self.event.wait()
-        self.event.clear() # Reset the event for the next interception
+    def toggle_request_intercept(self, status: bool):
+        self.intercept_request_enabled = status
 
-    def get_gui_response(self):
-        """
-        Called by the proxy thread to get the data from the GUI.
-        This will be the (potentially modified) request data or a drop command.
-        """
+    def toggle_response_intercept(self, status: bool):
+        self.intercept_response_enabled = status
+
+    def should_intercept_request(self):
+        return self.intercept_request_enabled
+
+    def should_intercept_response(self):
+        return self.intercept_response_enabled
+
+    def wait_for_request_decision(self):
+        """Blocks until the GUI provides a decision for a request."""
+        self.request_event.wait()
+        self.request_event.clear()
         try:
-            return self.data_queue.get_nowait()
+            return self.request_queue.get_nowait()
         except queue.Empty:
-            return None
+            return {'action': 'forward'} # Default to forward if queue is empty
 
-    def send_response_to_proxy(self, data):
-        """Called by the GUI to send data and unblock the proxy thread."""
-        self.data_queue.put(data)
-        self.event.set()
+    def send_request_decision(self, data):
+        """Called by the GUI to unblock the proxy for a request."""
+        self.request_queue.put(data)
+        self.request_event.set()
+
+    def wait_for_response_decision(self):
+        """Blocks until the GUI provides a decision for a response."""
+        self.response_event.wait()
+        self.response_event.clear()
+        try:
+            return self.response_queue.get_nowait()
+        except queue.Empty:
+            return {'action': 'forward'}
+
+    def send_response_decision(self, data):
+        """Called by the GUI to unblock the proxy for a response."""
+        self.response_queue.put(data)
+        self.response_event.set()
