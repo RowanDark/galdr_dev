@@ -1,8 +1,17 @@
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import requests
+from PyQt6.QtCore import QObject, pyqtSignal
+
+class ProxyLogger(QObject):
+    """A QObject to handle signal emission for the proxy."""
+    request_logged = pyqtSignal(dict)
 
 class ProxyRequestHandler(BaseHTTPRequestHandler):
+    def __init__(self, *args, logger, **kwargs):
+        self.logger = logger
+        super().__init__(*args, **kwargs)
+
     def do_GET(self):
         self.handle_request('GET')
 
@@ -19,44 +28,46 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         self.handle_request('HEAD')
 
     def handle_request(self, method):
-        # Construct the full URL
         url = f"{self.path}"
-
-        # Copy headers from the client request
         req_headers = {key: value for key, value in self.headers.items()}
-
-        # Read body if present
         content_length = int(self.headers.get('Content-Length', 0))
         req_body = self.rfile.read(content_length) if content_length else None
 
-        print(f"[*] Proxying {method} request to: {url}")
+        log_data = {'method': method, 'url': url, 'status': 'Error', 'size': 0}
 
         try:
-            # Forward the request to the target server
             resp = requests.request(method, url, headers=req_headers, data=req_body, allow_redirects=False, verify=False)
 
-            # Send response status code
-            self.send_response(resp.status_code)
+            log_data['status'] = resp.status_code
+            log_data['size'] = len(resp.content)
 
-            # Send response headers
+            self.send_response(resp.status_code)
             for key, value in resp.headers.items():
                 if key.lower() not in ('content-encoding', 'transfer-encoding'):
                     self.send_header(key, value)
             self.end_headers()
-
-            # Send response body
             self.wfile.write(resp.content)
 
         except requests.exceptions.RequestException as e:
             self.send_error(502, f"Proxy Error: {e}")
+            log_data['status'] = 502
+            log_data['url'] = f"Error: {e}"
+
+        finally:
+            self.logger.request_logged.emit(log_data)
+
 
 class MitmProxy(threading.Thread):
     def __init__(self, host='127.0.0.1', port=8080):
         super().__init__()
         self.host = host
         self.port = port
-        self.server = HTTPServer((self.host, self.port), ProxyRequestHandler)
-        self.daemon = True  # Thread will exit when main program exits
+        self.logger = ProxyLogger()
+
+        # Use a lambda to pass the logger instance to the handler
+        handler_factory = lambda *args, **kwargs: ProxyRequestHandler(*args, logger=self.logger, **kwargs)
+        self.server = HTTPServer((self.host, self.port), handler_factory)
+        self.daemon = True
 
     def run(self):
         print(f"[*] Starting proxy server on {self.host}:{self.port}")
