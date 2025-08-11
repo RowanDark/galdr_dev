@@ -8,12 +8,18 @@ from PyQt6.QtGui import QFont
 from galdr.proxy.mitm_proxy import MitmProxy
 from galdr.proxy import cert_utils
 
+from PyQt6.QtWidgets import QMenu
+from PyQt6.QtGui import QAction
+
 class ProxyTab(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, repeater_tab, main_window, parent=None):
         super().__init__(parent)
+        self.repeater_tab = repeater_tab
+        self.main_window = main_window
         self.proxy_thread = None
         self.proxy_host = '127.0.0.1'
         self.proxy_port = 8080
+        self.full_requests = [] # To store detailed request data
 
         # Ensure CA certificate exists before UI is initialized
         cert_utils.get_ca_certificate()
@@ -60,6 +66,9 @@ class ProxyTab(QWidget):
         self.history_table.setColumnWidth(3, 80)
         self.history_table.setColumnWidth(4, 100)
 
+        self.history_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.history_table.customContextMenuRequested.connect(self.show_context_menu)
+
         history_layout.addWidget(self.history_table)
         history_group.setLayout(history_layout)
         layout.addWidget(history_group)
@@ -87,6 +96,39 @@ class ProxyTab(QWidget):
 
         self.setLayout(layout)
 
+    def show_context_menu(self, position):
+        """Show context menu on right-click."""
+        if self.history_table.selectionModel().hasSelection():
+            menu = QMenu()
+            send_to_repeater_action = QAction("🔄 Send to Repeater", self)
+            send_to_repeater_action.triggered.connect(self.send_to_repeater)
+            menu.addAction(send_to_repeater_action)
+            menu.exec(self.history_table.mapToGlobal(position))
+
+    def send_to_repeater(self):
+        """Send the selected request to the Repeater tab."""
+        selected_rows = self.history_table.selectionModel().selectedRows()
+        if not selected_rows:
+            return
+
+        # Get the index of the first selected row
+        row_index = selected_rows[0].row()
+
+        if 0 <= row_index < len(self.full_requests):
+            request_data = self.full_requests[row_index]
+
+            # The body in RepeaterTab expects a string, not bytes.
+            # We already decoded it as 'latin-1' which is safe.
+            repeater_data = {
+                'method': request_data.get('method'),
+                'url': request_data.get('url'),
+                'headers': request_data.get('headers'),
+                'body': request_data.get('body')
+            }
+
+            self.repeater_tab.load_request(repeater_data)
+            self.main_window.tab_widget.setCurrentWidget(self.repeater_tab)
+
     def export_ca_cert(self):
         """Handle exporting the CA certificate."""
         default_path = str(cert_utils.CA_CERT_PATH.home() / "galdr_ca.pem")
@@ -107,6 +149,7 @@ class ProxyTab(QWidget):
         if checked:
             try:
                 self.history_table.setRowCount(0) # Clear table on start
+                self.full_requests.clear() # Clear detailed requests
                 self.proxy_thread = MitmProxy(host=self.proxy_host, port=self.proxy_port)
                 self.proxy_thread.logger.request_logged.connect(self.add_log_entry)
                 self.proxy_thread.start()
@@ -129,6 +172,8 @@ class ProxyTab(QWidget):
 
     def add_log_entry(self, log_data):
         """Adds a new request to the history table from a signal."""
+        self.full_requests.append(log_data)
+
         row_position = self.history_table.rowCount()
         self.history_table.insertRow(row_position)
 

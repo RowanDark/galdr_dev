@@ -74,9 +74,16 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
 
         req_headers = {key: value for key, value in self.headers.items()}
         content_length = int(self.headers.get('Content-Length', 0))
-        req_body = self.rfile.read(content_length) if content_length else None
+        req_body = self.rfile.read(content_length) if content_length else b''
 
-        log_data = {'method': method, 'url': url, 'status': 'Error', 'size': 0}
+        log_data = {
+            'method': method,
+            'url': url,
+            'status': 'Error',
+            'size': 0,
+            'headers': req_headers,
+            'body': req_body.decode('latin-1') # Decode for safe JSON serialization
+        }
 
         try:
             resp = requests.request(method, url, headers=req_headers, data=req_body, allow_redirects=False, verify=False)

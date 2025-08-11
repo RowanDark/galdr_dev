@@ -202,14 +202,16 @@ class MainWindow(QMainWindow):
         self.project_profiles_tab.profile_loaded.connect(self.load_profile_settings)
         self.tab_widget.addTab(self.project_profiles_tab, "📁 Projects")
         
-        # Proxy tab
-        from gui.proxy_tab import ProxyTab
-        self.proxy_tab = ProxyTab()
-        self.tab_widget.addTab(self.proxy_tab, "📡 Proxy")
-
-        # Repeater tab
+        # Repeater tab (must be created before Proxy tab to pass reference)
         self.repeater_tab = RepeaterTab()
         self.repeater_tab.request_sent.connect(self.log_repeater_request)
+
+        # Proxy tab
+        from gui.proxy_tab import ProxyTab
+        self.proxy_tab = ProxyTab(repeater_tab=self.repeater_tab, main_window=self)
+        self.tab_widget.addTab(self.proxy_tab, "📡 Proxy")
+
+        # Add repeater tab to widget after proxy
         self.tab_widget.addTab(self.repeater_tab, "🔄 Repeater")
         
         # AI Settings tab
