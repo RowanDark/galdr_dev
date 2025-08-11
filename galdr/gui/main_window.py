@@ -211,6 +211,11 @@ class MainWindow(QMainWindow):
         self.repeater_tab = RepeaterTab()
         self.repeater_tab.request_sent.connect(self.log_repeater_request)
 
+        # Decoder tab
+        from gui.decoder_tab import DecoderTab
+        self.decoder_tab = DecoderTab()
+        self.tab_widget.addTab(self.decoder_tab, "🔡 Decoder")
+
         # Proxy tab
         from gui.proxy_tab import ProxyTab
         self.proxy_tab = ProxyTab(repeater_tab=self.repeater_tab, main_window=self)
