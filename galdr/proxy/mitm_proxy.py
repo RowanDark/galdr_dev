@@ -6,13 +6,15 @@ from PyQt6.QtCore import QObject, pyqtSignal
 class ProxyLogger(QObject):
     """A QObject to handle signal emission for the proxy."""
     request_logged = pyqtSignal(dict)
+    request_intercepted = pyqtSignal(dict)
 
 import ssl
 from galdr.proxy import cert_utils
 
 class ProxyRequestHandler(BaseHTTPRequestHandler):
-    def __init__(self, *args, logger, **kwargs):
+    def __init__(self, *args, logger, intercept_manager, **kwargs):
         self.logger = logger
+        self.intercept_manager = intercept_manager
         self.https_host = None # To store the hostname from CONNECT
         super().__init__(*args, **kwargs)
 
@@ -76,6 +78,28 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         content_length = int(self.headers.get('Content-Length', 0))
         req_body = self.rfile.read(content_length) if content_length else b''
 
+        # If interception is on, block and wait for the GUI
+        if self.intercept_manager and self.intercept_manager.is_intercept_on():
+            # TODO: This will need to be made more robust to handle modified requests
+            intercept_data = {
+                'method': method, 'url': url, 'headers': req_headers,
+                'body': req_body.decode('latin-1')
+            }
+            self.logger.request_intercepted.emit(intercept_data)
+            self.intercept_manager.wait_for_gui()
+
+            # Get the GUI's response
+            gui_response = self.intercept_manager.get_gui_response()
+            if gui_response and gui_response.get('action') == 'drop':
+                # Abort the request by closing the connection
+                self.close_connection = True
+                return
+            elif gui_response and gui_response.get('action') == 'forward':
+                # Overwrite original request data with modified data from GUI
+                req_headers = gui_response.get('headers', req_headers)
+                # Re-encode body from string to bytes for the requests library
+                req_body = gui_response.get('body', '').encode('latin-1')
+
         log_data = {
             'method': method,
             'url': url,
@@ -108,14 +132,20 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
 
 
 class MitmProxy(threading.Thread):
-    def __init__(self, host='127.0.0.1', port=8080):
+    def __init__(self, host='127.0.0.1', port=8080, intercept_manager=None):
         super().__init__()
         self.host = host
         self.port = port
         self.logger = ProxyLogger()
+        self.intercept_manager = intercept_manager
 
-        # Use a lambda to pass the logger instance to the handler
-        handler_factory = lambda *args, **kwargs: ProxyRequestHandler(*args, logger=self.logger, **kwargs)
+        # Use a lambda to pass instances to the handler
+        handler_factory = lambda *args, **kwargs: ProxyRequestHandler(
+            *args,
+            logger=self.logger,
+            intercept_manager=self.intercept_manager,
+            **kwargs
+        )
         self.server = HTTPServer((self.host, self.port), handler_factory)
         self.daemon = True
 

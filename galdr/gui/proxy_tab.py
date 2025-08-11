@@ -7,8 +7,9 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 from galdr.proxy.mitm_proxy import MitmProxy
 from galdr.proxy import cert_utils
+from galdr.proxy.intercept_manager import InterceptManager
 
-from PyQt6.QtWidgets import QMenu
+from PyQt6.QtWidgets import QMenu, QSplitter, QTabWidget
 from PyQt6.QtGui import QAction
 
 class ProxyTab(QWidget):
@@ -20,6 +21,8 @@ class ProxyTab(QWidget):
         self.proxy_host = '127.0.0.1'
         self.proxy_port = 8080
         self.full_requests = [] # To store detailed request data
+        self.intercept_manager = InterceptManager()
+        self.intercepted_request_data = None # To hold the current intercepted request
 
         # Ensure CA certificate exists before UI is initialized
         cert_utils.get_ca_certificate()
@@ -52,9 +55,66 @@ class ProxyTab(QWidget):
         controls_group.setLayout(controls_layout)
         layout.addWidget(controls_group)
 
-        # 2. History Table
-        history_group = QGroupBox("Intercepted Traffic")
-        history_layout = QVBoxLayout()
+        # Create sub-tabs for Intercept and History
+        self.sub_tab_widget = QTabWidget()
+
+        # Create Intercept Tab
+        self.init_intercept_tab()
+
+        # Create History Tab
+        self.init_history_tab()
+
+        layout.addWidget(self.sub_tab_widget)
+
+    def init_intercept_tab(self):
+        """Initializes the Intercept sub-tab UI."""
+        intercept_widget = QWidget()
+        layout = QVBoxLayout(intercept_widget)
+
+        # Controls for interception
+        intercept_controls_layout = QHBoxLayout()
+        self.intercept_button = QPushButton("Intercept is OFF")
+        self.intercept_button.setCheckable(True)
+        self.intercept_button.clicked.connect(self.toggle_intercept_mode)
+        intercept_controls_layout.addWidget(self.intercept_button)
+
+        self.forward_button = QPushButton("Forward")
+        self.forward_button.setEnabled(False)
+        self.forward_button.clicked.connect(self.forward_request)
+        intercept_controls_layout.addWidget(self.forward_button)
+
+        self.drop_button = QPushButton("Drop")
+        self.drop_button.setEnabled(False)
+        self.drop_button.clicked.connect(self.drop_request)
+        intercept_controls_layout.addWidget(self.drop_button)
+        intercept_controls_layout.addStretch()
+        layout.addLayout(intercept_controls_layout)
+
+        # Splitter for request/response (though we only have request for now)
+        splitter = QSplitter(Qt.Orientation.Vertical)
+
+        # Request editor
+        req_group = QGroupBox("Intercepted Request")
+        req_layout = QVBoxLayout(req_group)
+        self.intercept_headers_text = QTextEdit()
+        self.intercept_headers_text.setPlaceholderText("Request Headers...")
+        self.intercept_headers_text.setReadOnly(False)
+        req_layout.addWidget(self.intercept_headers_text)
+
+        self.intercept_body_text = QTextEdit()
+        self.intercept_body_text.setPlaceholderText("Request Body...")
+        self.intercept_body_text.setReadOnly(False)
+        req_layout.addWidget(self.intercept_body_text)
+
+        splitter.addWidget(req_group)
+        layout.addWidget(splitter)
+
+        self.sub_tab_widget.addTab(intercept_widget, "Intercept")
+
+    def init_history_tab(self):
+        """Initializes the History sub-tab UI."""
+        history_widget = QWidget()
+        history_layout = QVBoxLayout(history_widget)
 
         self.history_table = QTableWidget()
         self.history_table.setColumnCount(5)
@@ -70,8 +130,7 @@ class ProxyTab(QWidget):
         self.history_table.customContextMenuRequested.connect(self.show_context_menu)
 
         history_layout.addWidget(self.history_table)
-        history_group.setLayout(history_layout)
-        layout.addWidget(history_group)
+        self.sub_tab_widget.addTab(history_widget, "History")
 
         # 3. Instructions Group
         instructions_group = QGroupBox("How to Use")
@@ -95,6 +154,65 @@ class ProxyTab(QWidget):
         layout.addWidget(instructions_group, 1) # Give less stretch to this
 
         self.setLayout(layout)
+
+    def toggle_intercept_mode(self, checked):
+        """Toggles the interception status."""
+        self.intercept_manager.toggle_intercept(checked)
+        if checked:
+            self.intercept_button.setText("Intercept is ON")
+            self.intercept_button.setStyleSheet("background-color: #4CAF50; color: white;")
+        else:
+            self.intercept_button.setText("Intercept is OFF")
+            self.intercept_button.setStyleSheet("") # Reset to default
+
+    def handle_intercepted_request(self, request_data):
+        """Populates the Intercept tab with data from a paused request."""
+        self.intercepted_request_data = request_data # Store original request
+        self.sub_tab_widget.setCurrentWidget(self.sub_tab_widget.widget(0)) # Switch to Intercept tab
+
+        headers = "\n".join(f"{k}: {v}" for k, v in request_data.get('headers', {}).items())
+        self.intercept_headers_text.setPlainText(headers)
+        self.intercept_body_text.setPlainText(request_data.get('body', ''))
+
+        self.forward_button.setEnabled(True)
+        self.drop_button.setEnabled(True)
+
+    def reset_intercept_ui(self):
+        """Clears the intercept UI and disables buttons."""
+        self.intercept_headers_text.clear()
+        self.intercept_body_text.clear()
+        self.forward_button.setEnabled(False)
+        self.drop_button.setEnabled(False)
+        self.intercepted_request_data = None
+
+    def forward_request(self):
+        """Unblocks the proxy to forward the request with potentially modified data."""
+        if not self.intercepted_request_data:
+            return
+
+        # Parse headers from text area
+        modified_headers = {}
+        for line in self.intercept_headers_text.toPlainText().split('\n'):
+            if ':' in line:
+                key, value = line.split(':', 1)
+                modified_headers[key.strip()] = value.strip()
+
+        modified_body = self.intercept_body_text.toPlainText()
+
+        data_to_send = {
+            'action': 'forward',
+            'method': self.intercepted_request_data['method'],
+            'url': self.intercepted_request_data['url'],
+            'headers': modified_headers,
+            'body': modified_body
+        }
+        self.intercept_manager.send_response_to_proxy(data_to_send)
+        self.reset_intercept_ui()
+
+    def drop_request(self):
+        """Unblocks the proxy to drop the request."""
+        self.intercept_manager.send_response_to_proxy({'action': 'drop'})
+        self.reset_intercept_ui()
 
     def show_context_menu(self, position):
         """Show context menu on right-click."""
@@ -150,8 +268,13 @@ class ProxyTab(QWidget):
             try:
                 self.history_table.setRowCount(0) # Clear table on start
                 self.full_requests.clear() # Clear detailed requests
-                self.proxy_thread = MitmProxy(host=self.proxy_host, port=self.proxy_port)
+                self.proxy_thread = MitmProxy(
+                    host=self.proxy_host,
+                    port=self.proxy_port,
+                    intercept_manager=self.intercept_manager
+                )
                 self.proxy_thread.logger.request_logged.connect(self.add_log_entry)
+                self.proxy_thread.logger.request_intercepted.connect(self.handle_intercepted_request)
                 self.proxy_thread.start()
                 self.proxy_button.setText("⏹️ Stop Proxy")
                 self.proxy_status_label.setText(f"Status: Running on {self.proxy_host}:{self.proxy_port}")
