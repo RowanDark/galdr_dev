@@ -1,0 +1,13 @@
+You have an error in your SQL syntax
+unclosed quotation mark
+supplied argument is not a valid MySQL result
+PostgreSQL query failed
+Microsoft OLE DB Provider for ODBC Drivers error
+Oracle error
+DB2 SQL error
+SQLite error
+Informix
+Syntax error in string
+unterminated string
+nvarchar
+conversion failed
