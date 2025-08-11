@@ -3,9 +3,11 @@ from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from .base_check import BaseCheck, Vulnerability
 import os
 
+import asyncio
+
 class SqliCheck(BaseCheck):
-    def __init__(self, target_url):
-        super().__init__(target_url)
+    def __init__(self, target_url, ai_mode=False, ai_analyzer=None):
+        super().__init__(target_url, ai_mode, ai_analyzer)
         self.payload = "'" # Simple payload for error-based SQLi
         self.error_patterns = self.load_error_patterns()
 
@@ -36,11 +38,20 @@ class SqliCheck(BaseCheck):
         for param, values in query_params.items():
             original_value = values[0]
 
-            # Create a copy of the params to modify
-            test_params = query_params.copy()
-            test_params[param] = original_value + self.payload
+            # Combine static payload with AI-generated ones if in AI mode
+            payloads_to_test = [self.payload]
+            if self.ai_mode and self.ai_analyzer:
+                print(f"Generating AI payloads for SQLi on param: {param}")
+                context = {'url': self.target_url, 'param': param}
+                ai_payloads = asyncio.run(self.ai_analyzer.generate_payloads(context, "SQLi"))
+                payloads_to_test.extend(ai_payloads)
 
-            # Reconstruct the URL with the payload
+            for payload in payloads_to_test:
+                # Create a copy of the params to modify
+                test_params = query_params.copy()
+                test_params[param] = original_value + payload
+
+                # Reconstruct the URL with the payload
             new_query = urlencode(test_params, doseq=True)
             test_url = urlunparse(parsed_url._replace(query=new_query))
 

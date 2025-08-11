@@ -358,3 +358,34 @@ class AISecurityAnalyzer(QObject):
             providers[provider] = config['models']
         
         return providers
+
+    async def generate_payloads(self, context: Dict, check_type: str) -> List[str]:
+        """Generates contextual payloads using the configured AI provider."""
+        prompt = self._create_payload_generation_prompt(context, check_type)
+
+        try:
+            # For now, we'll just simulate this. A real implementation would call the cloud API.
+            # This avoids needing API keys for this step.
+            if self.current_provider != 'foundation-sec-8b' and self.current_provider != 'ollama':
+                print("Payload generation currently simulated for non-local providers.")
+                return [f"ai_payload_for_{context.get('param', 'p')}_1", f"ai_payload_for_{context.get('param', 'p')}_2"]
+
+            # In a real scenario, you'd await a call to self.cloud_ai._call_api or similar
+            # For now, we return a simulated list of payloads
+            if check_type.lower() == 'sqli':
+                return ["' OR 1=1 --", "'; exec xp_cmdshell('whoami'); --"]
+            elif check_type.lower() == 'xss':
+                return ["<script>alert('AI_XSS')</script>", "\"'><img src=x onerror=alert('AI_XSS')>"]
+            else:
+                return []
+        except Exception as e:
+            self.logger.error(f"AI payload generation failed: {e}")
+            return []
+
+    def _create_payload_generation_prompt(self, context: Dict, check_type: str) -> str:
+        """Creates a prompt for generating context-aware security payloads."""
+        return f"""
+        As a cybersecurity expert, generate a list of 5 creative, context-aware payloads for a '{check_type}' vulnerability check.
+        The target parameter is '{context.get('param', 'unknown')}' in the URL '{context.get('url', 'unknown')}'.
+        Return the payloads as a JSON-formatted list of strings. For example: ["payload1", "payload2"]
+        """

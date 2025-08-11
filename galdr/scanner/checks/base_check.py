@@ -1,6 +1,8 @@
 class BaseCheck:
-    def __init__(self, target_url):
+    def __init__(self, target_url, ai_mode=False, ai_analyzer=None):
         self.target_url = target_url
+        self.ai_mode = ai_mode
+        self.ai_analyzer = ai_analyzer
 
     def run(self):
         """

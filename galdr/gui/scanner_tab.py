@@ -5,8 +5,9 @@ from PyQt6.QtWidgets import (
 from galdr.scanner.active_scanner import ActiveScanner
 
 class ScannerTab(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, main_window, parent=None):
         super().__init__(parent)
+        self.main_window = main_window # To access ai_analyzer
         self.scanner_thread = None
         self.init_ui()
 
@@ -30,6 +31,11 @@ class ScannerTab(QWidget):
         self.stop_scan_button.setEnabled(False)
         # self.stop_scan_button.clicked.connect(self.stop_scan)
         controls_layout.addWidget(self.stop_scan_button)
+
+        controls_layout.addStretch()
+
+        self.ai_smart_scan_check = QCheckBox("Enable AI Smart Payloads")
+        controls_layout.addWidget(self.ai_smart_scan_check)
 
         controls_group.setLayout(controls_layout)
         layout.addWidget(controls_group)
@@ -78,7 +84,13 @@ class ScannerTab(QWidget):
         self.start_scan_button.setEnabled(False)
         self.stop_scan_button.setEnabled(True)
 
-        self.scanner_thread = ActiveScanner(targets)
+        ai_mode = self.ai_smart_scan_check.isChecked()
+
+        self.scanner_thread = ActiveScanner(
+            targets=targets,
+            ai_mode=ai_mode,
+            ai_analyzer=self.main_window.ai_analyzer
+        )
         self.scanner_thread.vulnerability_found.connect(self.add_finding_to_table)
         self.scanner_thread.scan_finished.connect(self.scan_finished)
         self.scanner_thread.start()

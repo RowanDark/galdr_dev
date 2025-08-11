@@ -181,7 +181,7 @@ class MainWindow(QMainWindow):
 
         # Scanner tab
         from gui.scanner_tab import ScannerTab
-        self.scanner_tab = ScannerTab()
+        self.scanner_tab = ScannerTab(main_window=self)
         self.tab_widget.addTab(self.scanner_tab, "🎯 Active Scan")
         
         # Results tab

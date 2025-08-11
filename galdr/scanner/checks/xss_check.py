@@ -4,9 +4,11 @@ from .base_check import BaseCheck, Vulnerability
 import os
 import html
 
+import asyncio
+
 class XssCheck(BaseCheck):
-    def __init__(self, target_url):
-        super().__init__(target_url)
+    def __init__(self, target_url, ai_mode=False, ai_analyzer=None):
+        super().__init__(target_url, ai_mode, ai_analyzer)
         self.payloads = self.load_payloads()
 
     def load_payloads(self):
@@ -35,7 +37,14 @@ class XssCheck(BaseCheck):
         for param, values in query_params.items():
             original_value = values[0]
 
-            for payload in self.payloads:
+            payloads_to_test = self.payloads[:] # Start with static payloads
+            if self.ai_mode and self.ai_analyzer:
+                print(f"Generating AI payloads for XSS on param: {param}")
+                context = {'url': self.target_url, 'param': param}
+                ai_payloads = asyncio.run(self.ai_analyzer.generate_payloads(context, "XSS"))
+                payloads_to_test.extend(ai_payloads)
+
+            for payload in payloads_to_test:
                 test_params = query_params.copy()
                 test_params[param] = original_value + payload
 
