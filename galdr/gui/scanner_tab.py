@@ -1,13 +1,15 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QTableWidget,
-    QTableWidgetItem, QHeaderView, QGroupBox, QTextEdit
+    QTableWidgetItem, QHeaderView, QGroupBox, QTextEdit, QMessageBox
 )
+from PyQt6.QtSql import QSqlQuery
 from galdr.scanner.active_scanner import ActiveScanner
 
 class ScannerTab(QWidget):
-    def __init__(self, main_window, parent=None):
+    def __init__(self, main_window, db, parent=None):
         super().__init__(parent)
         self.main_window = main_window # To access ai_analyzer
+        self.db = db
         self.scanner_thread = None
         self.init_ui()
 
@@ -63,13 +65,33 @@ class ScannerTab(QWidget):
         self.setLayout(layout)
 
     def import_targets(self):
-        """Placeholder for importing targets from the crawler."""
-        # For now, just add a dummy target
-        dummy_targets = [
-            "http://testphp.vulnweb.com/listproducts.php?cat=1",
-            "http://testphp.vulnweb.com/search.php?test=query"
-        ]
-        self.targets_text.setPlainText("\n".join(dummy_targets))
+        """Imports targets with query parameters from the crawler's results database."""
+        if not self.db or not self.db.isOpen():
+            QMessageBox.warning(self, "Database Error", "Database connection is not available.")
+            return
+
+        query = QSqlQuery(self.db)
+        # Select unique URLs that contain a '?' indicating query parameters
+        query_text = "SELECT DISTINCT url FROM results WHERE url LIKE '%?%'"
+
+        if not query.exec(query_text):
+            QMessageBox.warning(self, "Query Error", f"Failed to query results: {query.lastError().text()}")
+            return
+
+        urls = []
+        static_extensions = ['.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.woff', '.ttf', '.eot']
+        while query.next():
+            url = query.value(0)
+            # Basic filter to exclude common static files
+            if not any(url.lower().endswith(ext) for ext in static_extensions):
+                urls.append(url)
+
+        if not urls:
+            QMessageBox.information(self, "No Targets Found", "No URLs with query parameters found in the crawler results.")
+            return
+
+        self.targets_text.setPlainText("\n".join(urls))
+        QMessageBox.information(self, "Import Complete", f"Successfully imported {len(urls)} targets from the crawler results.")
 
     def start_scan(self):
         """Starts the active scanner thread."""
