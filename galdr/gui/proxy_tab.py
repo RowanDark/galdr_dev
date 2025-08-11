@@ -33,12 +33,16 @@ class ProxyTab(QWidget):
         # Communication file paths
         self.events_file = os.path.join(gettempdir(), "galdr_events.log")
         self.command_file = os.path.join(gettempdir(), "galdr_commands.log")
+        self.state_file = os.path.join(gettempdir(), "galdr_state.json")
         self.last_read_pos = 0
 
         # Timer for polling the events file
         self.poll_timer = QTimer(self)
         self.poll_timer.setInterval(250) # Poll every 250ms
         self.poll_timer.timeout.connect(self.check_for_events)
+
+        # Write initial state
+        self.write_state_to_file()
 
         self.init_ui()
 
@@ -192,9 +196,18 @@ class ProxyTab(QWidget):
 
         self.setLayout(layout)
 
+    def write_state_to_file(self):
+        """Writes the current interception state to the shared state file."""
+        state = {
+            'intercept_requests': self.intercept_button.isChecked(),
+            'intercept_responses': self.intercept_response_check.isChecked()
+        }
+        with open(self.state_file, "w") as f:
+            json.dump(state, f)
+
     def toggle_intercept_mode(self, checked):
         """Toggles the request interception status."""
-        self.intercept_manager.toggle_request_intercept(checked)
+        self.write_state_to_file()
         if checked:
             self.intercept_button.setText("Intercept is ON")
             self.intercept_button.setStyleSheet("background-color: #4CAF50; color: white;")
@@ -233,14 +246,17 @@ class ProxyTab(QWidget):
 
     def toggle_response_intercept_mode(self, checked):
         """Toggles the response interception status."""
-        self.intercept_manager.toggle_response_intercept(checked)
+        self.write_state_to_file()
 
     def handle_intercepted_response(self, response_data):
         """Populates the Intercept tab with data from a paused response."""
         self.intercepted_flow_id = response_data.get('flow_id')
         self.intercepting_response = True
+        self.intercepted_request_data = response_data # Store for status code
 
-        headers = "\n".join(f"{k}: {v}" for k, v in response_data.get('headers', {}).items())
+        # Prepend status line to headers for visibility/editing
+        status_line = f"HTTP/1.1 {response_data.get('status_code', 200)} OK"
+        headers = status_line + "\n" + "\n".join(f"{k}: {v}" for k, v in response_data.get('headers', {}).items())
         self.intercept_resp_headers_text.setPlainText(headers)
         self.intercept_resp_body_text.setPlainText(response_data.get('body', ''))
 
@@ -268,7 +284,8 @@ class ProxyTab(QWidget):
                     self.add_log_entry(data)
                 elif event_type == "request_intercepted":
                     self.handle_intercepted_request(data)
-                # TODO: Add response interception handling
+                elif event_type == "response_intercepted":
+                    self.handle_intercepted_response(data)
         except (IOError, json.JSONDecodeError):
             pass # Ignore errors, will retry on next poll
 
@@ -283,8 +300,22 @@ class ProxyTab(QWidget):
             return
 
         if self.intercepting_response:
-            # TODO: Add response modification logic
-            command = {"flow_id": self.intercepted_flow_id, "action": "forward", "data": {}}
+            modified_headers = {}
+            # TODO: This doesn't handle status code changes yet
+            for line in self.intercept_resp_headers_text.toPlainText().split('\n')[1:]: # Skip status line
+                if ':' in line:
+                    key, value = line.split(':', 1)
+                    modified_headers[key.strip()] = value.strip()
+            modified_body = self.intercept_resp_body_text.toPlainText()
+
+            modified_data = {
+                'response': {
+                    'headers': modified_headers,
+                    'body': modified_body,
+                    'status_code': self.intercepted_request_data.get('status_code', 200)
+                }
+            }
+            command = {"flow_id": self.intercepted_flow_id, "action": "forward", "data": modified_data}
         else:
             modified_headers = {}
             for line in self.intercept_headers_text.toPlainText().split('\n'):

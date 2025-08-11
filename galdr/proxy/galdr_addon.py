@@ -4,22 +4,34 @@ import time
 from mitmproxy import ctx, http
 
 # Define communication files in a temporary directory
-# This assumes a standard temp dir, making it more portable.
 from tempfile import gettempdir
 TEMP_DIR = gettempdir()
 EVENTS_FILE = os.path.join(TEMP_DIR, "galdr_events.log")
 COMMAND_FILE = os.path.join(TEMP_DIR, "galdr_commands.log")
+STATE_FILE = os.path.join(TEMP_DIR, "galdr_state.json")
 
 class GaldrGUIAddon:
     def __init__(self):
-        self.intercept_requests = False
-        self.intercept_responses = False
+        self.state = {'intercept_requests': False, 'intercept_responses': False}
         # Clear communication files on startup
-        with open(EVENTS_FILE, "w") as f:
-            f.write("")
-        with open(COMMAND_FILE, "w") as f:
-            f.write("")
+        with open(EVENTS_FILE, "w") as f: f.write("")
+        with open(COMMAND_FILE, "w") as f: f.write("")
+        self.update_state(self.state) # Create state file with defaults
         print("Galdr Addon Initialized.")
+
+    def update_state(self, new_state=None):
+        """Reads state from the state file, or writes it if new_state is provided."""
+        if new_state:
+            with open(STATE_FILE, "w") as f:
+                json.dump(new_state, f)
+            self.state = new_state
+        else:
+            try:
+                with open(STATE_FILE, "r") as f:
+                    self.state = json.load(f)
+            except (IOError, json.JSONDecodeError):
+                # If file doesn't exist or is invalid, use defaults
+                pass
 
     def log_event(self, event_type, data):
         """Writes an event to the events file for the GUI to read."""
@@ -28,8 +40,8 @@ class GaldrGUIAddon:
 
     def request(self, flow: http.HTTPFlow):
         """Called for every request."""
-        # For now, we only care about interception. Logging will be handled by the response.
-        if self.intercept_requests:
+        self.update_state() # Read the latest state from the GUI
+        if self.state.get('intercept_requests', False):
             flow.intercept()
 
             request_data = {
@@ -71,7 +83,38 @@ class GaldrGUIAddon:
         }
         self.log_event("flow_log", log_data)
 
-        # TODO: Implement response interception logic here
+        # Handle response interception
+        self.update_state()
+        if self.state.get('intercept_responses', False):
+            flow.intercept()
+
+            response_data = {
+                'flow_id': flow.id,
+                'status_code': flow.response.status_code,
+                'headers': dict(flow.response.headers),
+                'body': flow.response.get_text(strict=False)
+            }
+            self.log_event("response_intercepted", response_data)
+
+            # Block and wait for a command from the GUI
+            command = self.wait_for_command(flow.id)
+
+            if command:
+                if command['action'] == 'drop':
+                    flow.kill()
+                elif command['action'] == 'forward':
+                    # Apply modifications from GUI if they exist
+                    if 'data' in command and 'response' in command['data']:
+                        modified_data = command['data']['response']
+                        flow.response.text = modified_data.get('body', flow.response.text)
+                        flow.response.status_code = modified_data.get('status_code', flow.response.status_code)
+                        if 'headers' in modified_data:
+                            flow.response.headers.clear()
+                            for k, v in modified_data['headers'].items():
+                                flow.response.headers[k] = v
+                    flow.resume()
+            else:
+                flow.resume() # Failsafe
 
     def wait_for_command(self, flow_id):
         """
