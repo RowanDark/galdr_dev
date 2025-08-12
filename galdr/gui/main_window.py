@@ -702,8 +702,10 @@ class MainWindow(QMainWindow):
         return 0
     
     def get_cve_count(self):
-        """Get count of CVE vulnerabilities found"""
-        return 0  # Placeholder
+        """Get count of CVE vulnerabilities found in the current analysis."""
+        if hasattr(self, 'cve_monitor_tab'):
+            return self.cve_monitor_tab.vulnerability_table.rowCount()
+        return 0
     
     def get_recent_activity(self):
         """Get recent activity summary"""

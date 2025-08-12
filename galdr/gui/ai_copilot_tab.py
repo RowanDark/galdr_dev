@@ -7,13 +7,13 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSlot, QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QFont, QTextCursor
-from ..core.ai_integration import AISecurityAnalyzer
+from ..core.ai_integration import AISecurityAnalyzer, AIAnalysisResult
 
 class AIResponseThread(QThread):
     response_ready = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
     
-    def __init__(self, ai_analyzer, prompt, context=None):
+    def __init__(self, ai_analyzer: AISecurityAnalyzer, prompt: str, context: dict = None):
         super().__init__()
         self.ai_analyzer = ai_analyzer
         self.prompt = prompt
@@ -21,116 +21,51 @@ class AIResponseThread(QThread):
     
     def run(self):
         try:
-            # Simulate AI response generation
-            # In production, this would call the actual AI API
-            response = self.generate_ai_response(self.prompt, self.context)
-            self.response_ready.emit(response)
+            # Create a dummy finding from the user's prompt to send to the analyzer
+            dummy_finding = {
+                "id": "copilot-query",
+                "title": "User Query",
+                "description": self.prompt,
+                "evidence": f"User context: {self.context}",
+            }
+
+            # Run the async analysis method in a new event loop
+            results = asyncio.run(self.ai_analyzer.analyze_findings([dummy_finding]))
+
+            if results and 'error' not in results[0]:
+                response_data = results[0]
+                formatted_response = self.format_ai_response(response_data)
+                self.response_ready.emit(formatted_response)
+            else:
+                error_msg = results[0].get('error', 'Unknown error') if results else 'Unknown error'
+                self.error_occurred.emit(error_msg)
+
         except Exception as e:
             self.error_occurred.emit(str(e))
-    
-    def generate_ai_response(self, prompt, context):
-        """Generate AI response based on prompt and context"""
-        # This is a simulation - in production, use actual AI API
-        if "vulnerability" in prompt.lower():
-            return """🔍 **Vulnerability Analysis**
 
-Based on your query about vulnerabilities, here's my analysis:
+    def format_ai_response(self, analysis: dict) -> str:
+        """Formats the AI analysis result into a user-friendly markdown string."""
+        # The result from the backend is already a dict because of `result.__dict__`
+        return f"""
+        ### 🤖 AI Analysis Result
 
-**Key Considerations:**
-• Severity assessment is crucial for prioritization
-• Check for authentication bypass possibilities
-• Look for input validation issues
-• Consider privilege escalation vectors
+        **Severity Assessment:** {analysis.get('severity_assessment', 'N/A')}
+        **Remediation Priority:** {analysis.get('remediation_priority', 'N/A')}
+        **Exploitation Likelihood:** {analysis.get('exploitation_likelihood', 'N/A')}
+        **Business Impact:** {analysis.get('business_impact', 'N/A')}
 
-**Recommended Actions:**
-1. Verify the vulnerability manually
-2. Create a proof-of-concept
-3. Document the impact clearly
-4. Check for similar issues in the codebase
+        ---
 
-**Bug Bounty Tips:**
-• Focus on business logic flaws for higher payouts
-• Chain vulnerabilities for maximum impact
-• Always follow responsible disclosure
+        **Attack Vectors:**
+        - {"<br>- ".join(analysis.get('attack_vectors', ['None']))}
 
-Would you like me to analyze specific findings from your current scan?"""
+        ---
+
+        **AI Reasoning:**
+        <p>{analysis.get('ai_reasoning', 'No reasoning provided.')}</p>
         
-        elif "technology" in prompt.lower() or "tech" in prompt.lower():
-            return """🔧 **Technology Analysis**
-
-I can help you analyze the detected technologies:
-
-**Common Security Issues by Technology:**
-• **WordPress**: Plugin vulnerabilities, weak admin credentials
-• **Apache**: Version-specific CVEs, misconfigurations
-• **React**: XSS via dangerouslySetInnerHTML, client-side routing issues
-• **Angular**: Template injection, CSP bypasses
-
-**Reconnaissance Tips:**
-1. Check version numbers against CVE databases
-2. Look for default configurations
-3. Enumerate plugins/modules
-4. Test for known exploits
-
-**Next Steps:**
-• Run CVE analysis on detected technologies
-• Check for outdated versions
-• Look for technology-specific attack vectors
-
-What specific technologies did you discover?"""
-        
-        elif "scan" in prompt.lower() or "crawl" in prompt.lower():
-            return """🚀 **Scan Optimization**
-
-Here's how to optimize your reconnaissance:
-
-**Crawl Strategy:**
-• Increase depth for complex applications
-• Enable subdomain enumeration for broader coverage
-• Use screenshots to identify interesting pages
-• Monitor for rate limiting
-
-**Security Scanning:**
-• Enable passive security scanning
-• Run CVE analysis on discovered technologies
-• Look for sensitive information disclosure
-• Check security headers
-
-**Bug Bounty Focus:**
-• Target admin panels and API endpoints
-• Look for file upload functionality
-• Test authentication mechanisms
-• Check for business logic flaws
-
-**Performance Tips:**
-• Adjust delay based on target responsiveness
-• Use headless mode for faster scanning
-• Save profiles for repeat testing
-
-How can I help optimize your current scan?"""
-        
-        else:
-            return f"""🤖 **AI Co-pilot Response**
-
-I'm here to help with your cybersecurity reconnaissance and bug bounty work!
-
-**I can assist with:**
-• Vulnerability analysis and prioritization
-• Technology stack assessment
-• Scan optimization and strategy
-• Bug bounty methodology
-• Security finding interpretation
-• Attack vector identification
-
-**Your query:** "{prompt}"
-
-**Suggestions:**
-• Ask about specific vulnerabilities you've found
-• Request analysis of detected technologies
-• Get advice on scan configuration
-• Discuss bug bounty strategies
-
-What would you like to explore further?"""
+        *(Confidence: {analysis.get('confidence_score', 0.0):.1%})*
+        """
 
 class AICoPilotTab(QWidget):
     def __init__(self, ai_analyzer):

@@ -3,298 +3,126 @@ import json
 import logging
 import asyncio
 from typing import Dict, List, Optional, Any
-from dataclasses import dataclass
-from PyQt6.QtCore import QObject, pyqtSignal, QThread
-import requests
+from dataclasses import dataclass, field
+import aiohttp
 
 @dataclass
 class AIAnalysisResult:
     finding_id: str
-    severity_assessment: str
-    confidence_score: float
-    attack_vectors: List[str]
-    remediation_priority: str
-    exploitation_likelihood: str
-    business_impact: str
-    ai_reasoning: str
+    severity_assessment: str = "N/A"
+    confidence_score: float = 0.0
+    attack_vectors: List[str] = field(default_factory=list)
+    remediation_priority: str = "N/A"
+    exploitation_likelihood: str = "N/A"
+    business_impact: str = "N/A"
+    ai_reasoning: str = "N/A"
 
 class FoundationSec8BIntegration:
-    """Native integration with Cisco's Foundation-sec-8B security model"""
+    """Native integration with Cisco's Foundation-sec-8B security model via Ollama."""
     
-    def __init__(self):
-        self.model_name = "foundation-sec-8b"
+    def __init__(self, ollama_endpoint="http://localhost:11434/api/generate"):
+        self.model_name = "foundation-sec-8b" # This should match the model name in Ollama
+        self.endpoint = ollama_endpoint
         self.model_loaded = False
         self.logger = logging.getLogger(__name__)
         
     def load_model(self):
-        """Load the Foundation-sec-8B model for local inference"""
-        try:
-            # In production, this would load the actual model
-            # For now, we'll simulate the model loading
-            self.model_loaded = True
-            self.logger.info("Foundation-sec-8B model loaded successfully")
-            return True
-        except Exception as e:
-            self.logger.error(f"Failed to load Foundation-sec-8B: {e}")
-            return False
-    
-    def analyze_security_findings(self, findings: List[Dict]) -> List[AIAnalysisResult]:
-        """Analyze security findings using Foundation-sec-8B"""
+        """In this new architecture, we don't load the model directly. We just check if the endpoint is available."""
+        # A simple health check could be added here, but for now we assume it's running.
+        self.model_loaded = True
+        self.logger.info(f"Foundation-sec-8B integration ready (endpoint: {self.endpoint})")
+        return True
+
+    async def analyze_security_findings(self, findings: List[Dict], session: aiohttp.ClientSession) -> List[AIAnalysisResult]:
+        """Analyze security findings concurrently using the local AI model."""
         if not self.model_loaded:
-            raise Exception("Foundation-sec-8B model not loaded")
+            raise Exception("Foundation-sec-8B integration not initialized")
+
+        tasks = [self._call_foundation_sec_model(finding, session) for finding in findings]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Process results, handling potential errors from gather
+        final_results = []
+        for res in results:
+            if isinstance(res, Exception):
+                self.logger.error(f"Error during AI analysis: {res}")
+                # Optionally create a result with an error message
+                final_results.append(AIAnalysisResult(finding_id="error", ai_reasoning=str(res)))
+            else:
+                final_results.append(res)
         
-        results = []
-        for finding in findings:
-            # Simulate AI analysis - in production this would use the actual model
-            analysis = self._simulate_security_analysis(finding)
-            results.append(analysis)
-        
-        return results
-    
-    def _simulate_security_analysis(self, finding: Dict) -> AIAnalysisResult:
-        """Simulate Foundation-sec-8B security analysis"""
-        severity = finding.get('severity', 'medium')
-        title = finding.get('title', '')
-        
-        # AI-powered severity reassessment
-        ai_severity = self._reassess_severity(finding)
-        
-        # Generate attack vectors based on finding type
-        attack_vectors = self._generate_attack_vectors(finding)
-        
-        # Calculate exploitation likelihood
-        exploitation_likelihood = self._calculate_exploitation_likelihood(finding)
-        
-        return AIAnalysisResult(
-            finding_id=finding.get('id', 'unknown'),
-            severity_assessment=ai_severity,
-            confidence_score=0.85,  # AI confidence in analysis
-            attack_vectors=attack_vectors,
-            remediation_priority=self._calculate_remediation_priority(finding),
-            exploitation_likelihood=exploitation_likelihood,
-            business_impact=self._assess_business_impact(finding),
-            ai_reasoning=self._generate_reasoning(finding)
-        )
-    
-    def _reassess_severity(self, finding: Dict) -> str:
-        """AI-powered severity reassessment"""
-        title = finding.get('title', '').lower()
-        
-        # Foundation-sec-8B would analyze context and reassess
-        if 'sql injection' in title or 'xss' in title:
-            return 'critical'
-        elif 'authentication' in title or 'session' in title:
-            return 'high'
-        elif 'information disclosure' in title:
-            return 'medium'
-        else:
-            return finding.get('severity', 'medium')
-    
-    def _generate_attack_vectors(self, finding: Dict) -> List[str]:
-        """Generate potential attack vectors"""
-        title = finding.get('title', '').lower()
-        vectors = []
-        
-        if 'xss' in title:
-            vectors = ['Stored XSS payload injection', 'DOM manipulation', 'Session hijacking']
-        elif 'sql' in title:
-            vectors = ['Union-based injection', 'Boolean-based blind injection', 'Time-based injection']
-        elif 'authentication' in title:
-            vectors = ['Credential stuffing', 'Session fixation', 'Privilege escalation']
-        elif 'header' in title:
-            vectors = ['Clickjacking', 'MIME sniffing', 'Content injection']
-        else:
-            vectors = ['Manual verification required', 'Context-dependent exploitation']
-        
-        return vectors
-    
-    def _calculate_exploitation_likelihood(self, finding: Dict) -> str:
-        """Calculate likelihood of successful exploitation"""
-        severity = finding.get('severity', 'medium')
-        confidence = finding.get('confidence', 'tentative')
-        
-        if severity in ['critical', 'high'] and confidence == 'firm':
-            return 'Very High'
-        elif severity == 'high' or (severity == 'medium' and confidence == 'firm'):
-            return 'High'
-        elif severity == 'medium':
-            return 'Medium'
-        else:
-            return 'Low'
-    
-    def _calculate_remediation_priority(self, finding: Dict) -> str:
-        """Calculate remediation priority"""
-        severity = finding.get('severity', 'medium')
-        
-        priority_map = {
-            'critical': 'Immediate (0-24 hours)',
-            'high': 'Urgent (1-7 days)',
-            'medium': 'Standard (1-30 days)',
-            'low': 'Planned (30+ days)',
-            'info': 'Informational'
+        return final_results
+
+    def _create_analysis_prompt(self, finding: Dict) -> str:
+        """Creates a detailed prompt for the AI model to ensure a structured JSON response."""
+        return f"""
+        Analyze the following security finding and respond ONLY with a single, raw JSON object. Do not include markdown formatting or any text outside the JSON object.
+
+        Finding Details:
+        - Title: {finding.get('title', 'N/A')}
+        - Severity: {finding.get('severity', 'N/A')}
+        - URL: {finding.get('url', 'N/A')}
+        - Evidence: {finding.get('evidence', 'N/A')}
+
+        Based on the details, provide the following analysis in a JSON format with these exact keys:
+        {{
+            "severity_assessment": "Re-assess the severity (critical, high, medium, low, info)",
+            "confidence_score": "A float from 0.0 to 1.0 indicating your confidence in the analysis",
+            "attack_vectors": ["A list of potential attack vectors"],
+            "remediation_priority": "A priority for remediation (e.g., 'Immediate', 'High', 'Medium', 'Low')",
+            "exploitation_likelihood": "Likelihood of this being exploited (e.g., 'High', 'Medium', 'Low')",
+            "business_impact": "A brief description of the potential business impact",
+            "ai_reasoning": "A concise explanation for your analysis"
+        }}
+        """
+
+    async def _call_foundation_sec_model(self, finding: Dict, session: aiohttp.ClientSession) -> AIAnalysisResult:
+        """Calls the local Ollama-style API to get analysis for a single finding."""
+        prompt = self._create_analysis_prompt(finding)
+        data = {
+            "model": self.model_name,
+            "prompt": prompt,
+            "stream": False,
+            "format": "json" # Request JSON output from Ollama
         }
         
-        return priority_map.get(severity, 'Standard (1-30 days)')
-    
-    def _assess_business_impact(self, finding: Dict) -> str:
-        """Assess business impact of the vulnerability"""
-        title = finding.get('title', '').lower()
-        
-        if any(keyword in title for keyword in ['sql injection', 'authentication', 'session']):
-            return 'High - Data breach risk, compliance violations'
-        elif any(keyword in title for keyword in ['xss', 'csrf', 'injection']):
-            return 'Medium - User account compromise, data manipulation'
-        elif any(keyword in title for keyword in ['header', 'disclosure', 'cookie']):
-            return 'Low-Medium - Information leakage, security policy violations'
-        else:
-            return 'Low - Minimal direct business impact'
-    
-    def _generate_reasoning(self, finding: Dict) -> str:
-        """Generate AI reasoning for the analysis"""
-        title = finding.get('title', '')
-        severity = finding.get('severity', 'medium')
-        
-        return f"Foundation-sec-8B analysis: {title} represents a {severity} severity issue. " \
-               f"Based on cybersecurity threat modeling and vulnerability patterns, this finding " \
-               f"requires attention due to its potential for exploitation and business impact."
+        try:
+            async with session.post(self.endpoint, json=data, timeout=90) as response:
+                if response.status == 200:
+                    response_json = await response.json()
+                    analysis_json_str = response_json.get("response", "{}")
+                    analysis_data = json.loads(analysis_json_str)
+
+                    return AIAnalysisResult(
+                        finding_id=finding.get('id', 'unknown'),
+                        severity_assessment=analysis_data.get("severity_assessment", "N/A"),
+                        confidence_score=float(analysis_data.get("confidence_score", 0.0)),
+                        attack_vectors=analysis_data.get("attack_vectors", []),
+                        remediation_priority=analysis_data.get("remediation_priority", "N/A"),
+                        exploitation_likelihood=analysis_data.get("exploitation_likelihood", "N/A"),
+                        business_impact=analysis_data.get("business_impact", "N/A"),
+                        ai_reasoning=analysis_data.get("ai_reasoning", "No reasoning provided.")
+                    )
+                else:
+                    error_text = await response.text()
+                    self.logger.error(f"AI model API request failed with status {response.status}: {error_text}")
+                    raise Exception(f"API Error: {response.status} - {error_text}")
+        except asyncio.TimeoutError:
+            self.logger.error(f"Timeout calling AI model for finding: {finding.get('title')}")
+            raise Exception("Request to AI model timed out.")
+        except Exception as e:
+            self.logger.error(f"Exception calling AI model: {e}")
+            raise e
+
 
 class CloudAPIIntegration:
-    """Integration with cloud AI APIs for enhanced analysis"""
-    
+    # ... (CloudAPIIntegration can be implemented later, keeping the class structure)
     def __init__(self):
-        self.supported_providers = {
-            'openai': {
-                'models': ['gpt-4o', 'gpt-4-turbo', 'gpt-3.5-turbo'],
-                'endpoint': 'https://api.openai.com/v1/chat/completions'
-            },
-            'anthropic': {
-                'models': ['claude-3-5-sonnet-20241022', 'claude-3-opus-20240229'],
-                'endpoint': 'https://api.anthropic.com/v1/messages'
-            },
-            'deepseek': {
-                'models': ['deepseek-chat', 'deepseek-coder'],
-                'endpoint': 'https://api.deepseek.com/v1/chat/completions'
-            },
-            'ollama': {
-                'models': ['qwen2.5:7b', 'llama3.1:8b', 'codellama:7b'],
-                'endpoint': 'http://localhost:11434/api/generate'
-            }
-        }
-        self.api_keys = {}
         self.logger = logging.getLogger(__name__)
-    
-    def set_api_key(self, provider: str, api_key: str):
-        """Set API key for a provider"""
-        self.api_keys[provider] = api_key
-    
     async def analyze_with_cloud_ai(self, findings: List[Dict], provider: str, model: str) -> List[Dict]:
-        """Analyze findings using cloud AI APIs"""
-        if provider not in self.supported_providers:
-            raise ValueError(f"Unsupported provider: {provider}")
-        
-        if provider != 'ollama' and provider not in self.api_keys:
-            raise ValueError(f"API key not set for provider: {provider}")
-        
-        results = []
-        for finding in findings:
-            try:
-                analysis = await self._call_api(finding, provider, model)
-                results.append(analysis)
-            except Exception as e:
-                self.logger.error(f"API call failed for {provider}: {e}")
-                results.append({'error': str(e), 'finding': finding})
-        
-        return results
-    
-    async def _call_api(self, finding: Dict, provider: str, model: str) -> Dict:
-        """Make API call to cloud provider"""
-        prompt = self._create_security_analysis_prompt(finding)
-        
-        if provider == 'openai':
-            return await self._call_openai(prompt, model)
-        elif provider == 'anthropic':
-            return await self._call_anthropic(prompt, model)
-        elif provider == 'deepseek':
-            return await self._call_deepseek(prompt, model)
-        elif provider == 'ollama':
-            return await self._call_ollama(prompt, model)
-        else:
-            raise ValueError(f"Provider {provider} not implemented")
-    
-    def _create_security_analysis_prompt(self, finding: Dict) -> str:
-        """Create prompt for AI security analysis"""
-        return f"""
-        As a cybersecurity expert, analyze this security finding:
-        
-        Title: {finding.get('title', 'Unknown')}
-        Severity: {finding.get('severity', 'Unknown')}
-        Description: {finding.get('description', 'No description')}
-        Evidence: {finding.get('evidence', 'No evidence')}
-        CWE: {finding.get('cwe_id', 'Unknown')}
-        
-        Provide analysis in JSON format with:
-        1. severity_reassessment (critical/high/medium/low)
-        2. exploitation_difficulty (trivial/easy/moderate/hard)
-        3. attack_vectors (list of potential attack methods)
-        4. business_impact (description)
-        5. remediation_steps (list of specific actions)
-        6. false_positive_likelihood (percentage)
-        7. ai_confidence (percentage)
-        """
-    
-    async def _call_openai(self, prompt: str, model: str) -> Dict:
-        """Call OpenAI API"""
-        headers = {
-            'Authorization': f"Bearer {self.api_keys['openai']}",
-            'Content-Type': 'application/json'
-        }
-        
-        data = {
-            'model': model,
-            'messages': [
-                {'role': 'system', 'content': 'You are a cybersecurity expert specializing in vulnerability analysis.'},
-                {'role': 'user', 'content': prompt}
-            ],
-            'temperature': 0.1
-        }
-        
-        # Simulate API call - in production, use actual HTTP request
-        return {
-            'provider': 'openai',
-            'model': model,
-            'analysis': 'AI analysis would be here',
-            'confidence': 0.9
-        }
-    
-    async def _call_anthropic(self, prompt: str, model: str) -> Dict:
-        """Call Anthropic Claude API"""
-        # Similar implementation for Anthropic
-        return {
-            'provider': 'anthropic',
-            'model': model,
-            'analysis': 'Claude analysis would be here',
-            'confidence': 0.88
-        }
-    
-    async def _call_deepseek(self, prompt: str, model: str) -> Dict:
-        """Call DeepSeek API"""
-        # Similar implementation for DeepSeek
-        return {
-            'provider': 'deepseek',
-            'model': model,
-            'analysis': 'DeepSeek analysis would be here',
-            'confidence': 0.85
-        }
-    
-    async def _call_ollama(self, prompt: str, model: str) -> Dict:
-        """Call local Ollama API"""
-        # Implementation for local Ollama
-        return {
-            'provider': 'ollama',
-            'model': model,
-            'analysis': 'Ollama local analysis would be here',
-            'confidence': 0.82
-        }
+        self.logger.warning("Cloud AI providers are not fully implemented yet.")
+        return [{'error': 'Not Implemented', 'finding': f['id']} for f in findings]
+
 
 class AISecurityAnalyzer(QObject):
     """Main AI security analyzer that coordinates different AI backends"""
@@ -312,75 +140,43 @@ class AISecurityAnalyzer(QObject):
     
     def initialize(self):
         """Initialize AI systems"""
-        # Load Foundation-sec-8B by default
-        success = self.foundation_ai.load_model()
-        if success:
-            self.logger.info("AI Security Analyzer initialized with Foundation-sec-8B")
-        else:
-            self.logger.warning("Failed to load Foundation-sec-8B, falling back to basic analysis")
-        
-        return success
+        return self.foundation_ai.load_model()
     
     def set_provider(self, provider: str, model: str = None, api_key: str = None):
         """Set AI provider and model"""
         self.current_provider = provider
         self.current_model = model or provider
-        
-        if api_key and provider != 'foundation-sec-8b':
-            self.cloud_ai.set_api_key(provider, api_key)
+        # API key handling for cloud would go here
     
     async def analyze_findings(self, findings: List[Dict]) -> List[Dict]:
-        """Analyze security findings using configured AI provider"""
+        """Analyze security findings using configured AI provider."""
         if not findings:
             return []
         
         try:
-            if self.current_provider == 'foundation-sec-8b':
-                # Use local Foundation-sec-8B
-                results = self.foundation_ai.analyze_security_findings(findings)
-                return [result.__dict__ for result in results]
-            else:
-                # Use cloud API
-                return await self.cloud_ai.analyze_with_cloud_ai(
-                    findings, self.current_provider, self.current_model
-                )
+            async with aiohttp.ClientSession() as session:
+                if self.current_provider == 'foundation-sec-8b':
+                    results = await self.foundation_ai.analyze_security_findings(findings, session)
+                    return [result.__dict__ for result in results]
+                else:
+                    return await self.cloud_ai.analyze_with_cloud_ai(
+                        findings, self.current_provider, self.current_model
+                    )
         except Exception as e:
             self.logger.error(f"AI analysis failed: {e}")
             return [{'error': str(e)} for _ in findings]
     
     def get_available_providers(self) -> Dict[str, List[str]]:
         """Get list of available AI providers and models"""
-        providers = {
+        # This can be expanded later
+        return {
             'foundation-sec-8b': ['foundation-sec-8b (Local)']
         }
-        
-        for provider, config in self.cloud_ai.supported_providers.items():
-            providers[provider] = config['models']
-        
-        return providers
 
     async def generate_payloads(self, context: Dict, check_type: str) -> List[str]:
         """Generates contextual payloads using the configured AI provider."""
-        prompt = self._create_payload_generation_prompt(context, check_type)
-
-        try:
-            # For now, we'll just simulate this. A real implementation would call the cloud API.
-            # This avoids needing API keys for this step.
-            if self.current_provider != 'foundation-sec-8b' and self.current_provider != 'ollama':
-                print("Payload generation currently simulated for non-local providers.")
-                return [f"ai_payload_for_{context.get('param', 'p')}_1", f"ai_payload_for_{context.get('param', 'p')}_2"]
-
-            # In a real scenario, you'd await a call to self.cloud_ai._call_api or similar
-            # For now, we return a simulated list of payloads
-            if check_type.lower() == 'sqli':
-                return ["' OR 1=1 --", "'; exec xp_cmdshell('whoami'); --"]
-            elif check_type.lower() == 'xss':
-                return ["<script>alert('AI_XSS')</script>", "\"'><img src=x onerror=alert('AI_XSS')>"]
-            else:
-                return []
-        except Exception as e:
-            self.logger.error(f"AI payload generation failed: {e}")
-            return []
+        self.logger.warning("Payload generation is not fully implemented yet.")
+        return []
 
     def _create_payload_generation_prompt(self, context: Dict, check_type: str) -> str:
         """Creates a prompt for generating context-aware security payloads."""

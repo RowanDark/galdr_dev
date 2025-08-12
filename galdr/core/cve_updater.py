@@ -215,42 +215,90 @@ class CVEUpdaterThread(QThread):
         self.update_complete.emit(stats)
     
     async def update_from_nvd(self) -> int:
-        """Update CVEs from NVD (National Vulnerability Database)"""
-        # This would implement actual NVD API calls
-        # For now, we'll simulate with sample data
-        await asyncio.sleep(1)  # Simulate API call
+        """Update CVEs from NVD (National Vulnerability Database) using their public API."""
+        NVD_API_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+        total_cves_updated = 0
+        start_index = 0
+        results_per_page = 2000 # Max allowed by the API
         
-        sample_cves = [
-            CVEEntry(
-                cve_id="CVE-2024-0001",
-                description="Sample vulnerability in web framework",
-                cvss_score=7.5,
-                severity="HIGH",
-                published_date="2024-01-01",
-                modified_date="2024-01-02",
-                affected_products=["nginx 1.20.0", "nginx 1.20.1"],
-                references=["https://nvd.nist.gov/vuln/detail/CVE-2024-0001"],
-                exploit_available=True
-            ),
-            CVEEntry(
-                cve_id="CVE-2024-0002",
-                description="XSS vulnerability in popular CMS",
-                cvss_score=6.1,
-                severity="MEDIUM",
-                published_date="2024-01-03",
-                modified_date="2024-01-03",
-                affected_products=["wordpress 6.0", "wordpress 6.1"],
-                references=["https://nvd.nist.gov/vuln/detail/CVE-2024-0002"],
-                exploit_available=False
-            )
-        ]
+        async with aiohttp.ClientSession() as session:
+            while not self.should_stop:
+                try:
+                    params = {'resultsPerPage': results_per_page, 'startIndex': start_index}
+                    self.logger.info(f"Fetching CVEs from NVD API, starting at index {start_index}...")
+
+                    async with session.get(NVD_API_URL, params=params, timeout=60) as response:
+                        if response.status != 200:
+                            self.logger.error(f"NVD API request failed with status {response.status}: {await response.text()}")
+                            break
+
+                        data = await response.json()
+                        vulnerabilities = data.get('vulnerabilities', [])
+
+                        if not vulnerabilities:
+                            self.logger.info("No more vulnerabilities returned from NVD API. Update complete.")
+                            break
+
+                        for item in vulnerabilities:
+                            cve_item = item.get('cve', {})
+                            cve_id = cve_item.get('id')
+                            if not cve_id:
+                                continue
+
+                            # Extracting description
+                            description = "No description available."
+                            for desc in cve_item.get('descriptions', []):
+                                if desc.get('lang') == 'en':
+                                    description = desc.get('value', description)
+                                    break
+
+                            # Extracting CVSS v3.1 score and severity
+                            cvss_score = 0.0
+                            severity = "UNKNOWN"
+                            metrics = cve_item.get('metrics', {}).get('cvssMetricV31', [])
+                            if metrics:
+                                cvss_data = metrics[0].get('cvssData', {})
+                                cvss_score = cvss_data.get('baseScore', 0.0)
+                                severity = cvss_data.get('baseSeverity', "UNKNOWN")
+
+                            # Extracting other details
+                            published_date = cve_item.get('published')
+                            modified_date = cve_item.get('lastModified')
+                            references = [ref.get('url') for ref in cve_item.get('references', [])]
+
+                            # Placeholder for affected products and exploit availability
+                            affected_products = []
+                            exploit_available = False
+
+                            cve = CVEEntry(
+                                cve_id=cve_id,
+                                description=description,
+                                cvss_score=cvss_score,
+                                severity=severity,
+                                published_date=published_date,
+                                modified_date=modified_date,
+                                affected_products=affected_products,
+                                references=references,
+                                exploit_available=exploit_available
+                            )
+
+                            if self.cve_db.store_cve(cve):
+                                total_cves_updated += 1
+
+                        self.logger.info(f"Processed {len(vulnerabilities)} CVEs. Total updated so far: {total_cves_updated}")
+                        start_index += results_per_page
+
+                        # Respect NVD API rate limits
+                        await asyncio.sleep(6)
+
+                except asyncio.TimeoutError:
+                    self.logger.warning("NVD API request timed out. Retrying in 30 seconds...")
+                    await asyncio.sleep(30)
+                except Exception as e:
+                    self.logger.error(f"An error occurred during NVD update: {e}")
+                    break
         
-        count = 0
-        for cve in sample_cves:
-            if self.cve_db.store_cve(cve):
-                count += 1
-        
-        return count
+        return total_cves_updated
     
     async def update_from_mitre(self) -> int:
         """Update CVEs from MITRE"""
