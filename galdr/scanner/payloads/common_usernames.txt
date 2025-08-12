@@ -1,0 +1,15 @@
+admin
+administrator
+root
+user
+test
+guest
+support
+dev
+prod
+qa
+testuser
+adminuser
+webmaster
+info
+contact
