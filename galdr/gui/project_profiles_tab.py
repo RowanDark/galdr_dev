@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import pyqtSignal, Qt, QTimer
 from PyQt6.QtGui import QFont
-from core.project_manager import ProjectManager, ProjectProfile, ScanSettings, UserPreferences
+from ..core.project_manager import ProjectManager, ProjectProfile, ScanSettings, UserPreferences
 import time
 
 class CreateProfileDialog(QDialog):

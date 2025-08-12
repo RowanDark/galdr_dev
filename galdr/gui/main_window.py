@@ -10,16 +10,20 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtSql import QSqlDatabase, QSqlTableModel, QSqlQuery
 from PyQt6.QtCore import Qt, QSettings, pyqtSlot
 from PyQt6.QtGui import QAction, QFont, QPixmap, QIcon
-from auth.secure_config import SecureUserConfig
-from core.crawler_engine import AdvancedCrawler
-from gui.repeater_tab import RepeaterTab
-from gui.ai_settings_panel import AISettingsPanel
-from core.ai_integration import AISecurityAnalyzer
-from gui.theme_manager import ThemeManager
-from gui.project_profiles_tab import ProjectProfilesTab
-from gui.cve_monitor_tab import CVEMonitorTab
-from gui.ai_copilot_tab import AICoPilotTab
-from core.project_manager import ScanSettings, UserPreferences
+from ..auth.secure_config import SecureUserConfig
+from ..core.crawler_engine import AdvancedCrawler
+from .repeater_tab import RepeaterTab
+from .ai_settings_panel import AISettingsPanel
+from ..core.ai_integration import AISecurityAnalyzer
+from .theme_manager import ThemeManager
+from .project_profiles_tab import ProjectProfilesTab
+from .cve_monitor_tab import CVEMonitorTab
+from .ai_copilot_tab import AICoPilotTab
+from ..core.project_manager import ScanSettings, UserPreferences
+from .scanner_tab import ScannerTab
+from .decoder_tab import DecoderTab
+from .comparer_tab import ComparerTab
+from .proxy_tab import ProxyTab
 
 class MainWindow(QMainWindow):
     def __init__(self, authenticated_user):
@@ -180,7 +184,6 @@ class MainWindow(QMainWindow):
         self.init_crawler_tab()
 
         # Scanner tab
-        from gui.scanner_tab import ScannerTab
         self.scanner_tab = ScannerTab(main_window=self, db=self.db)
         self.tab_widget.addTab(self.scanner_tab, "🎯 Active Scan")
         
@@ -212,17 +215,14 @@ class MainWindow(QMainWindow):
         self.repeater_tab.request_sent.connect(self.log_repeater_request)
 
         # Decoder tab
-        from gui.decoder_tab import DecoderTab
         self.decoder_tab = DecoderTab()
         self.tab_widget.addTab(self.decoder_tab, "🔡 Decoder")
 
         # Comparer tab
-        from gui.comparer_tab import ComparerTab
         self.comparer_tab = ComparerTab()
         self.tab_widget.addTab(self.comparer_tab, "↔️ Comparer")
 
         # Proxy tab
-        from gui.proxy_tab import ProxyTab
         self.proxy_tab = ProxyTab(repeater_tab=self.repeater_tab, main_window=self)
         self.tab_widget.addTab(self.proxy_tab, "📡 Proxy")
 

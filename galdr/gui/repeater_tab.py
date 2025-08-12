@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QTextCharFormat, QColor, QFont
 from PyQt6.QtCore import Qt, pyqtSignal, QThread
 from playwright.async_api import async_playwright
+from galdr.utils.ui_utils import display_colored_diff
 
 class RepeaterRequestThread(QThread):
     response_received = pyqtSignal(dict)
@@ -301,8 +302,6 @@ class RepeaterTab(QWidget):
         
         self.display_colored_diff(diff)
         self.response_tabs.setCurrentIndex(1)  # Switch to comparison tab
-    
-from galdr.utils.ui_utils import display_colored_diff
 
     def display_colored_diff(self, diff_lines):
         """Display diff with color highlighting"""

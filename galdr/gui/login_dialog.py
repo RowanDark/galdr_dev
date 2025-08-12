@@ -5,8 +5,8 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSlot
 from PyQt6.QtGui import QFont, QPixmap, QIcon
-from auth.user_manager import UserManager
-from auth.secure_config import SecureUserConfig
+from ..auth.user_manager import UserManager
+from ..auth.secure_config import SecureUserConfig
 
 class LoginDialog(QDialog):
     def __init__(self):

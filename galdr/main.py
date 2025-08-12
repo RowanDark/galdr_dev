@@ -2,8 +2,8 @@ import sys
 import logging
 from PyQt6.QtWidgets import QApplication, QMessageBox
 from PyQt6.QtCore import Qt
-from gui.login_dialog import LoginDialog
-from gui.main_window import MainWindow
+from .gui.login_dialog import LoginDialog
+from .gui.main_window import MainWindow
 
 def setup_application_logging():
     """Setup application-wide logging"""

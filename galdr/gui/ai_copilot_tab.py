@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSlot, QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QFont, QTextCursor
-from core.ai_integration import AISecurityAnalyzer
+from ..core.ai_integration import AISecurityAnalyzer
 
 class AIResponseThread(QThread):
     response_ready = pyqtSignal(str)

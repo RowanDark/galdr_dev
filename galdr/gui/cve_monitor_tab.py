@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import pyqtSignal, Qt, QTimer
 from PyQt6.QtGui import QFont
-from core.cve_updater import CVEManager
+from ..core.cve_updater import CVEManager
 import time
 
 class CVEMonitorTab(QWidget):

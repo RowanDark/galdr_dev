@@ -1,0 +1,8 @@
+# Add proxies here in the format: host:port:country
+# For example:
+# 123.45.67.89:8080:US
+# 98.76.54.32:3128:GB
+
+192.168.1.100:8888:US
+192.168.1.101:8888:GB
+10.0.0.1:3128:DE

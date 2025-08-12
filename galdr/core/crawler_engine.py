@@ -7,10 +7,13 @@ import os
 import re
 from typing import Set, Dict, List, Optional
 from dataclasses import dataclass
+from urllib.parse import urlparse, urljoin
+from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright, Page, BrowserContext
 from PyQt6.QtCore import QThread, pyqtSignal
-from core.tech_detector import AdvancedTechDetector
-from core.passive_scanner import PassiveSecurityScanner
+from .tech_detector import AdvancedTechDetector
+from .passive_scanner import PassiveSecurityScanner
+from .proxy_manager import ProxyManager
 
 @dataclass
 class CrawlState:
@@ -110,7 +113,6 @@ class AdvancedCrawler(QThread):
     def generate_page_hash(self, content: str, url: str) -> str:
         """Generate hash for duplicate detection"""
         try:
-            from bs4 import BeautifulSoup
             soup = BeautifulSoup(content, 'html.parser')
             # Remove dynamic elements
             for tag in soup.find_all(['script', 'style', 'noscript']):
@@ -215,7 +217,6 @@ class AdvancedCrawler(QThread):
         """Main crawling logic with Playwright and enhanced features"""
         try:
             # Extract domain for subdomain enumeration
-            from urllib.parse import urlparse
             parsed_url = urlparse(self.url)
             domain = parsed_url.netloc
             
@@ -230,7 +231,6 @@ class AdvancedCrawler(QThread):
             current_proxy = None
             if self.use_proxies:
                 try:
-                    from core.proxy_manager import ProxyManager
                     self.proxy_manager = ProxyManager()
                     current_proxy = self.proxy_manager.get_next_proxy(self.region_filter)
                     if current_proxy:
@@ -487,8 +487,6 @@ class AdvancedCrawler(QThread):
         if not relative_url or relative_url == "None":
             return None
             
-        from urllib.parse import urljoin, urlparse
-        
         try:
             resolved = urljoin(base_url, relative_url)
             

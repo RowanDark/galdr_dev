@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import pyqtSignal, Qt
 from PyQt6.QtGui import QFont
-from core.ai_integration import AISecurityAnalyzer
+from ..core.ai_integration import AISecurityAnalyzer
 
 class AISettingsPanel(QWidget):
     ai_settings_changed = pyqtSignal(dict)
