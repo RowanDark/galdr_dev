@@ -1,8 +1,8 @@
-{interact_url}
-/etc/passwd@{interact_url}
-?url={interact_url}
-&url={interact_url}
-#
-# More complex wrappers could be added later, e.g., for XML or JSON
-# <doc><data>{interact_url}</data></doc>
-# {"key": "{interact_url}"}
+# Payloads for time-based SSRF detection.
+# These URLs are designed to be slow to respond.
+# We will measure the response time to detect potential SSRF.
+# The number at the end is the delay in seconds.
+https://httpbin.org/delay/3
+https://httpbin.org/delay/5
+http://10.255.255.1
+http://127.0.0.1:8081

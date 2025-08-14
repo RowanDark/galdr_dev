@@ -3,86 +3,86 @@ from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from .base_check import BaseCheck, Vulnerability
 import os
 import time
-import uuid
-
-# A public interact.sh server. A private one would be better for production.
-INTERACT_SERVER = "interact.sh"
+import re
 
 class SsrfCheck(BaseCheck):
     def __init__(self, target_url, ai_mode=False, ai_analyzer=None):
         super().__init__(target_url, ai_mode, ai_analyzer)
-        self.interaction_id = str(uuid.uuid4())
-        self.interaction_url = f"{self.interaction_id}.{INTERACT_SERVER}"
-        self.payload_formats = self.load_payloads()
-        print(f"SSRF Check using interaction URL: {self.interaction_url}")
+        self.payloads = self.load_payloads()
 
     def load_payloads(self):
-        """Loads SSRF payload formats from the payload file."""
-        formats = []
+        """Loads SSRF payloads from the payload file."""
+        payloads = []
         path = os.path.join('galdr', 'scanner', 'payloads', 'ssrf_payloads.txt')
         try:
             with open(path, 'r') as f:
-                formats = [line.strip() for line in f if line.strip() and not line.startswith('#')]
+                payloads = [line.strip() for line in f if line.strip() and not line.startswith('#')]
         except FileNotFoundError:
             print(f"Warning: SSRF payloads file not found at {path}")
-        return formats
-
-    def check_interactions(self):
-        """Polls the interaction server to see if a hit was received."""
-        # This is a simplified example. A real implementation would need to handle
-        # the specific API of the interaction server.
-        # For interact.sh, this would involve a DNS query for the ID or using its API.
-        # We will simulate this by assuming if a check was positive, an interaction happened.
-        # In a real tool, this would be an actual API call.
-        # e.g., return requests.get(f"http://{INTERACT_SERVER}/poll?id={self.interaction_id}").json()
-        return False # Placeholder
+        return payloads
 
     def run(self):
         """
-        Runs the SSRF check.
-        Returns a list of Vulnerability findings.
+        Runs the time-based SSRF check.
+        It injects payloads that point to slow-responding services and measures the response time.
         """
         findings = []
         parsed_url = urlparse(self.target_url)
-        query_params = parse_qs(parsed_url.query)
+        query_params = parse_qs(parsed_url.query, keep_blank_values=True)
 
         if not query_params:
             return findings
 
-        for param, values in query_params.items():
-            original_value = values[0]
+        for param in query_params:
+            original_values = query_params[param]
 
-            # Simple check to see if the parameter looks like a URL
-            if 'http' not in original_value.lower() and 'url' not in param.lower():
-                continue
+            for payload in self.payloads:
+                # Determine the expected delay and detection threshold from the payload
+                expected_delay = 0
+                match = re.search(r'/delay/(\d+)', payload)
+                if match:
+                    expected_delay = int(match.group(1))
+                else:
+                    # For internal/non-routable IPs, we expect a timeout, let's set a base delay
+                    expected_delay = 3
 
-            for payload_format in self.payload_formats:
-                payload = payload_format.format(interact_url=self.interaction_url)
+                # Set a detection threshold slightly lower than the expected delay
+                detection_threshold = expected_delay - 0.5
 
+                # Create a new set of parameters with the payload
                 test_params = query_params.copy()
-                test_params[param] = payload
+                test_params[param] = [payload] # Replace the parameter's value with the payload
 
                 new_query = urlencode(test_params, doseq=True)
                 test_url = urlunparse(parsed_url._replace(query=new_query))
 
+                start_time = time.time()
                 try:
-                    # Send the request, we don't care about the response, just that it's sent.
-                    requests.get(test_url, timeout=5)
+                    # Send the request with a timeout slightly longer than the expected delay
+                    requests.get(test_url, timeout=expected_delay + 2)
+                except requests.exceptions.ReadTimeout:
+                    # A timeout is the expected outcome for a successful time-based check
+                    elapsed_time = time.time() - start_time
+                    if elapsed_time >= detection_threshold:
+                        finding = Vulnerability(
+                            url=self.target_url,
+                            check_name="Server-Side Request Forgery (Time-Based)",
+                            parameter=param,
+                            severity="High",
+                            details=(
+                                f"The application took {elapsed_time:.2f} seconds to respond after injecting a payload "
+                                f"designed to take at least {expected_delay} seconds. This indicates a potential "
+                                f"time-based SSRF vulnerability."
+                            )
+                        )
+                        findings.append(finding)
+                        # Once a vulnerability is found for a parameter, move to the next one
+                        break
                 except requests.exceptions.RequestException:
-                    pass # Ignore errors
+                    # Ignore other connection errors
+                    pass
 
-                # After sending, check for an interaction
-                # In a real implementation, we would wait a bit before checking
-                time.sleep(2)
-                if self.check_interactions():
-                    finding = Vulnerability(
-                        url=self.target_url,
-                        check_name="Server-Side Request Forgery (SSRF)",
-                        parameter=param,
-                        severity="Critical",
-                        details=f"The application made an out-of-band request to {self.interaction_url} after injecting the payload."
-                    )
-                    findings.append(finding)
-                    break # Move to next parameter
+            if findings and any(f.parameter == param for f in findings):
+                continue # Skip to the next parameter if we already found a vulnerability for this one
 
         return findings
