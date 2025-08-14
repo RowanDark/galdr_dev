@@ -3,7 +3,7 @@ import time
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QLineEdit, 
     QPushButton, QLabel, QSplitter, QGroupBox, QComboBox,
-    QCheckBox, QScrollArea, QFrame
+    QCheckBox, QScrollArea, QFrame, QFileDialog, QMessageBox
 )
 from PyQt6.QtCore import Qt, pyqtSlot, QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QFont, QTextCursor
@@ -152,6 +152,10 @@ class AICoPilotTab(QWidget):
         self.scan_tips_btn = QPushButton("🚀 Scan Tips")
         self.scan_tips_btn.clicked.connect(self.quick_scan_tips)
         quick_actions_layout.addWidget(self.scan_tips_btn)
+
+        self.export_chat_btn = QPushButton("📤 Export Chat")
+        self.export_chat_btn.clicked.connect(self.export_chat)
+        quick_actions_layout.addWidget(self.export_chat_btn)
         
         input_layout.addLayout(quick_actions_layout)
         
@@ -415,6 +419,44 @@ How can I help you today?"""
         self.add_welcome_message()
     
     def export_chat(self):
-        """Export chat history"""
-        # TODO: Implement chat export functionality
-        pass
+        """Export chat history to a text file."""
+        if not self.chat_history:
+            QMessageBox.information(self, "No History", "There is no chat history to export.")
+            return
+
+        # Open file dialog to get save path
+        default_path = f"galdr_chat_export_{time.strftime('%Y%m%d-%H%M%S')}.md"
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Export Chat History", default_path,
+            "Markdown Files (*.md);;Text Files (*.txt);;All Files (*)"
+        )
+
+        if not file_path:
+            # User cancelled the dialog
+            return
+
+        try:
+            # Format chat history for export
+            export_content = f"# Galdr AI Co-pilot Chat History\n"
+            export_content += f"Exported on: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+
+            for message in self.chat_history:
+                sender = message.get('sender')
+                text = message.get('message')
+                timestamp = message.get('timestamp')
+
+                # A simple text representation, ignoring the HTML formatting for the export
+                # We can strip HTML tags if needed, but for now this is cleaner
+                clean_text = text.replace('<br>', '\n') # basic html tag replacement
+
+                export_content += f"--- [{timestamp}] {sender} ---\n"
+                export_content += f"{clean_text}\n\n"
+
+            # Write to file
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(export_content)
+
+            QMessageBox.information(self, "Export Successful", f"Chat history successfully exported to:\n{file_path}")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Export Failed", f"An error occurred while exporting the chat history: {e}")
