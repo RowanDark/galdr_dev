@@ -52,28 +52,33 @@ class SqliCheck(BaseCheck):
                 test_params[param] = original_value + payload
 
                 # Reconstruct the URL with the payload
-            new_query = urlencode(test_params, doseq=True)
-            test_url = urlunparse(parsed_url._replace(query=new_query))
+                new_query = urlencode(test_params, doseq=True)
+                test_url = urlunparse(parsed_url._replace(query=new_query))
 
-            try:
-                # Send the request
-                response = requests.get(test_url, timeout=10)
+                try:
+                    # Send the request
+                    response = requests.get(test_url, timeout=10)
 
-                # Check for error patterns in the response body
-                for pattern in self.error_patterns:
-                    if pattern in response.text:
-                        finding = Vulnerability(
-                            url=self.target_url,
-                            check_name="Error-based SQL Injection",
-                            parameter=param,
-                            severity="High",
-                            details=f"Found SQL error pattern '{pattern}' in response after injecting payload."
-                        )
-                        findings.append(finding)
-                        # Stop after first finding for this parameter
-                        break
-            except requests.exceptions.RequestException as e:
-                print(f"SqliCheck failed for {test_url}: {e}")
-                continue
+                    # Check for error patterns in the response body
+                    for pattern in self.error_patterns:
+                        if pattern in response.text:
+                            finding = Vulnerability(
+                                url=self.target_url,
+                                check_name="Error-based SQL Injection",
+                                parameter=param,
+                                severity="High",
+                                details=f"Found SQL error pattern '{pattern}' in response after injecting payload '{payload}'."
+                            )
+                            findings.append(finding)
+                            # Stop after first finding for this parameter
+                            break
+                except requests.exceptions.RequestException as e:
+                    # This is expected for some payloads, so we can ignore it unless debugging
+                    # print(f"SqliCheck failed for {test_url}: {e}")
+                    continue
+
+                # If a finding was made for this parameter, no need to test other payloads
+                if any(f.parameter == param for f in findings):
+                    break
 
         return findings

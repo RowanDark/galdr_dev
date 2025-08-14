@@ -114,6 +114,35 @@ class FoundationSec8BIntegration:
             self.logger.error(f"Exception calling AI model: {e}")
             raise e
 
+    async def generate_payloads(self, prompt: str, session: aiohttp.ClientSession) -> List[str]:
+        """Calls the local Ollama-style API to generate payloads."""
+        data = {
+            "model": self.model_name,
+            "prompt": prompt,
+            "stream": False,
+            "format": "json"
+        }
+
+        try:
+            async with session.post(self.endpoint, json=data, timeout=60) as response:
+                if response.status == 200:
+                    response_json = await response.json()
+                    # The prompt asks for a JSON list of strings.
+                    payload_json_str = response_json.get("response", "[]")
+                    payloads = json.loads(payload_json_str)
+                    if isinstance(payloads, list):
+                        return [str(p) for p in payloads]
+                    else:
+                        self.logger.warning(f"AI returned non-list for payloads: {payloads}")
+                        return []
+                else:
+                    error_text = await response.text()
+                    self.logger.error(f"AI payload API request failed with status {response.status}: {error_text}")
+                    return []
+        except Exception as e:
+            self.logger.error(f"Exception calling AI for payload generation: {e}")
+            return []
+
 
 class CloudAPIIntegration:
     # ... (CloudAPIIntegration can be implemented later, keeping the class structure)
@@ -175,8 +204,20 @@ class AISecurityAnalyzer(QObject):
 
     async def generate_payloads(self, context: Dict, check_type: str) -> List[str]:
         """Generates contextual payloads using the configured AI provider."""
-        self.logger.warning("Payload generation is not fully implemented yet.")
-        return []
+        prompt = self._create_payload_generation_prompt(context, check_type)
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                # For now, we only implement this for the local/default provider
+                if self.current_provider == 'foundation-sec-8b':
+                    payloads = await self.foundation_ai.generate_payloads(prompt, session)
+                    return payloads
+                else:
+                    self.logger.warning(f"Payload generation for provider '{self.current_provider}' is not implemented yet.")
+                    return []
+        except Exception as e:
+            self.logger.error(f"AI payload generation failed: {e}")
+            return []
 
     def _create_payload_generation_prompt(self, context: Dict, check_type: str) -> str:
         """Creates a prompt for generating context-aware security payloads."""
