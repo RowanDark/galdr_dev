@@ -183,8 +183,8 @@ class CVEUpdaterThread(QThread):
         """Update CVE database from multiple sources"""
         self.update_progress.emit("Starting CVE database update...", 0)
         
+        # The order is important: get all CVEs from MITRE first, then enrich with exploit data.
         sources = [
-            self.update_from_nvd,
             self.update_from_mitre,
             self.update_from_exploit_db
         ]
@@ -215,59 +215,75 @@ class CVEUpdaterThread(QThread):
         self.update_complete.emit(stats)
     
     async def update_from_nvd(self) -> int:
-        """Update CVEs from NVD (National Vulnerability Database) using their public API."""
-        NVD_API_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+        """This is now a placeholder, as the MITRE source is more comprehensive."""
+        self.logger.info("Skipping NVD update; using MITRE CVE List as the primary source.")
+        await asyncio.sleep(0) # Yield control
+        return 0
+
+    async def update_from_mitre(self) -> int:
+        """
+        Updates the CVE database by cloning or pulling the cvelistV5 repository
+        from GitHub and parsing the JSON files.
+        """
+        CVE_REPO_URL = "https://github.com/CVEProject/cvelistV5.git"
+        # Store the repo in a subdirectory of the data folder
+        repo_path = self.cve_db.db_path.parent / "cvelistV5"
         total_cves_updated = 0
-        start_index = 0
-        results_per_page = 2000 # Max allowed by the API
-        
-        async with aiohttp.ClientSession() as session:
-            while not self.should_stop:
-                try:
-                    params = {'resultsPerPage': results_per_page, 'startIndex': start_index}
-                    self.logger.info(f"Fetching CVEs from NVD API, starting at index {start_index}...")
 
-                    async with session.get(NVD_API_URL, params=params, timeout=60) as response:
-                        if response.status != 200:
-                            self.logger.error(f"NVD API request failed with status {response.status}: {await response.text()}")
-                            break
+        try:
+            # 1. Clone or pull the repository
+            if repo_path.exists():
+                self.logger.info(f"Updating existing CVE repository at {repo_path}...")
+                # Using os.system for simplicity in this context
+                os.system(f"cd {repo_path} && git pull")
+            else:
+                self.logger.info(f"Cloning CVE repository to {repo_path}...")
+                os.system(f"git clone --depth 1 {CVE_REPO_URL} {repo_path}")
 
-                        data = await response.json()
-                        vulnerabilities = data.get('vulnerabilities', [])
+            # 2. Walk the directory and parse JSON files
+            cve_dir = repo_path / "cves"
+            self.logger.info(f"Starting to parse CVE JSON files from {cve_dir}...")
 
-                        if not vulnerabilities:
-                            self.logger.info("No more vulnerabilities returned from NVD API. Update complete.")
-                            break
+            for root, dirs, files in os.walk(cve_dir):
+                if self.should_stop:
+                    self.logger.info("CVE update from MITRE stopped by user.")
+                    break
 
-                        for item in vulnerabilities:
-                            cve_item = item.get('cve', {})
-                            cve_id = cve_item.get('id')
+                for file in files:
+                    if file.endswith(".json"):
+                        file_path = Path(root) / file
+                        try:
+                            with open(file_path, 'r', encoding='utf-8') as f:
+                                cve_data = json.load(f)
+
+                            cve_id = cve_data.get('cveMetadata', {}).get('cveId')
                             if not cve_id:
                                 continue
 
-                            # Extracting description
-                            description = "No description available."
-                            for desc in cve_item.get('descriptions', []):
-                                if desc.get('lang') == 'en':
-                                    description = desc.get('value', description)
+                            # Extract data from CVE JSON 5.0 format
+                            containers = cve_data.get('containers', {}).get('cna', {})
+
+                            description = "No description."
+                            for desc_item in containers.get('descriptions', []):
+                                if desc_item.get('lang') == 'en':
+                                    description = desc_item.get('value', description)
                                     break
 
-                            # Extracting CVSS v3.1 score and severity
                             cvss_score = 0.0
                             severity = "UNKNOWN"
-                            metrics = cve_item.get('metrics', {}).get('cvssMetricV31', [])
+                            metrics = containers.get('metrics', [])
                             if metrics:
-                                cvss_data = metrics[0].get('cvssData', {})
-                                cvss_score = cvss_data.get('baseScore', 0.0)
-                                severity = cvss_data.get('baseSeverity', "UNKNOWN")
+                                # Find the most relevant CVSS score (prefer v3.1)
+                                cvss_data = metrics[0].get('cvssV3_1', metrics[0].get('cvssV3_0', {}))
+                                if cvss_data:
+                                    cvss_score = cvss_data.get('baseScore', 0.0)
+                                    severity = cvss_data.get('baseSeverity', "UNKNOWN")
 
-                            # Extracting other details
-                            published_date = cve_item.get('published')
-                            modified_date = cve_item.get('lastModified')
-                            references = [ref.get('url') for ref in cve_item.get('references', [])]
+                            published_date = cve_data.get('cveMetadata', {}).get('datePublished')
+                            modified_date = cve_data.get('cveMetadata', {}).get('dateUpdated')
+                            references = [ref.get('url') for ref in containers.get('references', [])]
 
-                            # Placeholder for affected products and exploit availability
-                            affected_products = []
+                            # This source doesn't have exploit data, so we keep the default
                             exploit_available = False
 
                             cve = CVEEntry(
@@ -277,7 +293,7 @@ class CVEUpdaterThread(QThread):
                                 severity=severity,
                                 published_date=published_date,
                                 modified_date=modified_date,
-                                affected_products=affected_products,
+                                affected_products=[], # Parsing affected products is complex, placeholder for now
                                 references=references,
                                 exploit_available=exploit_available
                             )
@@ -285,30 +301,80 @@ class CVEUpdaterThread(QThread):
                             if self.cve_db.store_cve(cve):
                                 total_cves_updated += 1
 
-                        self.logger.info(f"Processed {len(vulnerabilities)} CVEs. Total updated so far: {total_cves_updated}")
-                        start_index += results_per_page
+                        except json.JSONDecodeError:
+                            self.logger.warning(f"Could not parse JSON file: {file_path}")
+                        except Exception as e:
+                            self.logger.error(f"Error processing file {file_path}: {e}")
 
-                        # Respect NVD API rate limits
-                        await asyncio.sleep(6)
+            self.logger.info(f"Finished parsing. Updated/added {total_cves_updated} CVEs from MITRE.")
 
-                except asyncio.TimeoutError:
-                    self.logger.warning("NVD API request timed out. Retrying in 30 seconds...")
-                    await asyncio.sleep(30)
-                except Exception as e:
-                    self.logger.error(f"An error occurred during NVD update: {e}")
-                    break
-        
+        except Exception as e:
+            self.logger.error(f"An error occurred during the MITRE CVE update process: {e}")
+
         return total_cves_updated
     
-    async def update_from_mitre(self) -> int:
-        """Update CVEs from MITRE"""
-        await asyncio.sleep(1)  # Simulate API call
-        return 0  # Placeholder
-    
     async def update_from_exploit_db(self) -> int:
-        """Update exploit information from Exploit-DB"""
-        await asyncio.sleep(1)  # Simulate API call
-        return 0  # Placeholder
+        """
+        Updates the exploit_available flag in the CVE database by cloning or
+        pulling the exploit-db repository and parsing its index file.
+        """
+        EXPLOITDB_REPO_URL = "https://github.com/offensive-security/exploitdb.git"
+        repo_path = self.cve_db.db_path.parent / "exploitdb"
+        total_exploits_mapped = 0
+
+        try:
+            # 1. Clone or pull the repository
+            if repo_path.exists():
+                self.logger.info(f"Updating existing Exploit-DB repository at {repo_path}...")
+                os.system(f"cd {repo_path} && git pull")
+            else:
+                self.logger.info(f"Cloning Exploit-DB repository to {repo_path}...")
+                os.system(f"git clone --depth 1 {EXPLOITDB_REPO_URL} {repo_path}")
+
+            # 2. Parse the CSV file
+            csv_path = repo_path / "files_exploits.csv"
+            self.logger.info(f"Parsing Exploit-DB index file from {csv_path}...")
+
+            if not csv_path.exists():
+                self.logger.error("Could not find files_exploits.csv in the Exploit-DB repository.")
+                return 0
+
+            with open(csv_path, 'r', encoding='utf-8') as f:
+                # The CSV has a header, which we can skip
+                next(f)
+                for line in f:
+                    if self.should_stop:
+                        self.logger.info("Exploit-DB update stopped by user.")
+                        break
+
+                    try:
+                        # This file is not standard CSV, but we can parse it manually
+                        parts = line.strip().split(',')
+                        if len(parts) < 4: continue
+
+                        codes = parts[3] # The 'codes' column contains CVE IDs
+                        if 'CVE-' in codes:
+                            # A single entry can have multiple CVEs, separated by ';'
+                            cve_ids = [code.strip() for code in codes.split(';') if 'CVE-' in code]
+                            for cve_id in cve_ids:
+                                # Update the exploit_available flag in our database
+                                with sqlite3.connect(self.cve_db.db_path) as conn:
+                                    cursor = conn.cursor()
+                                    cursor.execute(
+                                        "UPDATE cves SET exploit_available = 1 WHERE cve_id = ?",
+                                        (cve_id,)
+                                    )
+                                    if cursor.rowcount > 0:
+                                        total_exploits_mapped += 1
+                    except Exception:
+                        continue # Skip malformed lines
+
+            self.logger.info(f"Finished mapping exploits. Mapped {total_exploits_mapped} exploits to CVEs.")
+
+        except Exception as e:
+            self.logger.error(f"An error occurred during the Exploit-DB update process: {e}")
+
+        return total_exploits_mapped
     
     async def update_technology_mappings(self):
         """Update technology to CVE mappings"""

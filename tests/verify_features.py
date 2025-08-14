@@ -62,14 +62,22 @@ def verify_cve_updater():
     with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM cves")
-        count = cursor.fetchone()[0]
+        cve_count = cursor.fetchone()[0]
 
-    print(f"Found {count} CVEs in the database.")
-    if count > 0:
+        cursor.execute("SELECT COUNT(*) FROM cves WHERE exploit_available = 1")
+        exploit_count = cursor.fetchone()[0]
+
+    print(f"Found {cve_count} total CVEs in the database.")
+    print(f"Found {exploit_count} CVEs marked with available exploits.")
+
+    if cve_count > 0 and exploit_count > 0:
         print("--- ✅ Test Passed: CVE Updater ---")
         return True
     else:
-        print("--- ❌ Test FAILED: No CVEs were added to the database. ---")
+        if cve_count == 0:
+            print("--- ❌ Test FAILED: No CVEs were added from MITRE. ---")
+        if exploit_count == 0:
+            print("--- ❌ Test FAILED: No exploits were mapped from Exploit-DB. ---")
         return False
 
 if __name__ == "__main__":
