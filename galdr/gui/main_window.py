@@ -25,6 +25,7 @@ from .decoder_tab import DecoderTab
 from .comparer_tab import ComparerTab
 from .proxy_tab import ProxyTab
 from .raider_tab import RaiderTab
+from ..plugins.manager import PluginManager
 
 class MainWindow(QMainWindow):
     def __init__(self, authenticated_user):
@@ -230,7 +231,7 @@ class MainWindow(QMainWindow):
         self.tab_widget.addTab(self.comparer_tab, "↔️ Comparer")
 
         # Proxy tab
-        self.proxy_tab = ProxyTab(repeater_tab=self.repeater_tab, main_window=self)
+        self.proxy_tab = ProxyTab(repeater_tab=self.repeater_tab, main_window=self, plugin_manager=self.plugin_manager)
         self.tab_widget.addTab(self.proxy_tab, "📡 Proxy")
 
         # Add repeater tab to widget after proxy
@@ -245,8 +246,27 @@ class MainWindow(QMainWindow):
         self.ai_settings_panel.ai_settings_changed.connect(self.update_ai_settings)
         self.tab_widget.addTab(self.ai_settings_panel, "🤖 AI Settings")
         
+        # Load and integrate plugins
+        self.load_and_integrate_plugins()
+
         # Status bar
         self.statusBar().showMessage(f"Ready - User: {self.current_user}")
+
+    def load_and_integrate_plugins(self):
+        """Initializes the plugin manager, loads plugins, and integrates them."""
+        self.plugin_manager = PluginManager()
+        self.plugin_manager.load_plugins()
+
+        # Add custom tabs from plugins
+        custom_tabs = self.plugin_manager.get_custom_tabs()
+        for name, widget_class in custom_tabs.items():
+            try:
+                # We assume the widget class has a constructor that takes no arguments
+                tab_instance = widget_class()
+                self.tab_widget.addTab(tab_instance, f"🔌 {name}")
+                self.append_log(f"🔌 Loaded custom tab from plugin: {name}")
+            except Exception as e:
+                self.append_log(f"❌ Failed to load custom tab '{name}': {e}")
     
     def init_crawler_tab(self):
         """Initialize the main crawler interface"""

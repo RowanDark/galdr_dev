@@ -80,10 +80,11 @@ class CommandServer(QThread):
 
 
 class ProxyTab(QWidget):
-    def __init__(self, repeater_tab, main_window, parent=None):
+    def __init__(self, repeater_tab, main_window, plugin_manager, parent=None):
         super().__init__(parent)
         self.repeater_tab = repeater_tab
         self.main_window = main_window
+        self.plugin_manager = plugin_manager
         self.proxy_process = None
         self.proxy_host = '127.0.0.1'
         self.proxy_port = 8080
@@ -257,7 +258,21 @@ class ProxyTab(QWidget):
             data = event.get("data")
 
             if event_type == "flow_log":
+                # Call plugin hooks for request/response
+                for hook in self.plugin_manager.get_proxy_request_hooks():
+                    try:
+                        hook(data) # Pass the whole flow data
+                    except Exception as e:
+                        print(f"Error in proxy_request_hook: {e}")
+
                 self.add_log_entry(data)
+
+                for hook in self.plugin_manager.get_proxy_response_hooks():
+                    try:
+                        hook(data)
+                    except Exception as e:
+                        print(f"Error in proxy_response_hook: {e}")
+
             elif event_type == "request_intercepted":
                 self.handle_intercepted_request(data)
             elif event_type == "response_intercepted":

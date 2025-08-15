@@ -5,6 +5,7 @@ import asyncio
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 import aiohttp
+from PyQt6.QtCore import QObject, pyqtSignal
 
 @dataclass
 class AIAnalysisResult:
