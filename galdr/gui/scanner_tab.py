@@ -11,6 +11,8 @@ from galdr.scanner.checks.command_injection_check import CommandInjectionCheck
 from galdr.scanner.checks.ssrf_check import SsrfCheck
 from galdr.scanner.checks.idor_check import IdorCheck
 from galdr.scanner.checks.username_enum_check import UsernameEnumCheck
+from galdr.scanner.checks.xxe_check import XxeCheck
+from galdr.scanner.checks.deserialization_check import DeserializationCheck
 
 class ScannerTab(QWidget):
     def __init__(self, main_window, db, parent=None):
@@ -18,6 +20,7 @@ class ScannerTab(QWidget):
         self.main_window = main_window # To access ai_analyzer
         self.db = db
         self.scanner_thread = None
+        self.imported_requests = [] # To store full request data
         self.init_ui()
 
     def init_ui(self):
@@ -59,6 +62,8 @@ class ScannerTab(QWidget):
             "Cross-Site Scripting (XSS)": QCheckBox("Cross-Site Scripting (XSS)"),
             "Command Injection": QCheckBox("Command Injection"),
             "Server-Side Request Forgery (SSRF)": QCheckBox("Server-Side Request Forgery (SSRF)"),
+            "XML External Entity (XXE)": QCheckBox("XML External Entity (XXE)"),
+            "Insecure Deserialization": QCheckBox("Insecure Deserialization"),
             "Insecure Direct Object References (IDOR)": QCheckBox("Insecure Direct Object References (IDOR)"),
             "Username Enumeration": QCheckBox("Username Enumeration"),
         }
@@ -99,63 +104,63 @@ class ScannerTab(QWidget):
         self.setLayout(layout)
 
     def import_targets(self):
-        """Imports targets with query parameters from the crawler's results database."""
+        """Imports full requests from the crawler's results database."""
         if not self.db or not self.db.isOpen():
             QMessageBox.warning(self, "Database Error", "Database connection is not available.")
             return
 
         query = QSqlQuery(self.db)
-        # Select unique URLs that contain a '?' indicating query parameters
-        query_text = "SELECT DISTINCT url FROM results WHERE url LIKE '%?%'"
+        query_text = "SELECT url, method, request_headers, request_body FROM results WHERE url LIKE '%?%'"
 
         if not query.exec(query_text):
             QMessageBox.warning(self, "Query Error", f"Failed to query results: {query.lastError().text()}")
             return
 
-        urls = []
-        static_extensions = ['.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.woff', '.ttf', '.eot']
+        self.imported_requests = []
+        urls_for_display = []
         while query.next():
-            url = query.value(0)
+            request_data = {
+                "url": query.value(0),
+                "method": query.value(1),
+                "headers": json.loads(query.value(2) or '{}'),
+                "body": query.value(3)
+            }
             # Basic filter to exclude common static files
-            if not any(url.lower().endswith(ext) for ext in static_extensions):
-                urls.append(url)
+            if not any(request_data["url"].lower().endswith(ext) for ext in ['.css', '.js', '.png', '.jpg']):
+                self.imported_requests.append(request_data)
+                urls_for_display.append(request_data["url"])
 
-        if not urls:
-            QMessageBox.information(self, "No Targets Found", "No URLs with query parameters found in the crawler results.")
+        if not self.imported_requests:
+            QMessageBox.information(self, "No Targets Found", "No scannable targets found in the crawler results.")
             return
 
-        self.targets_text.setPlainText("\n".join(urls))
-        QMessageBox.information(self, "Import Complete", f"Successfully imported {len(urls)} targets from the crawler results.")
+        self.targets_text.setPlainText("\n".join(urls_for_display))
+        QMessageBox.information(self, "Import Complete", f"Successfully imported {len(self.imported_requests)} requests as targets.")
 
     def start_scan(self):
-        """Starts the active scanner thread."""
-        targets = self.targets_text.toPlainText().strip().split('\n')
-        targets = [t.strip() for t in targets if t.strip()]
-
-        if not targets:
-            print("No targets to scan.")
+        """Starts the active scanner thread with the imported requests."""
+        if not self.imported_requests:
+            QMessageBox.warning(self, "No Targets", "Please import targets from the crawler before starting a scan.")
             return
 
-        self.results_table.setRowCount(0) # Clear previous results
+        self.results_table.setRowCount(0)
         self.start_scan_button.setEnabled(False)
         self.stop_scan_button.setEnabled(True)
 
         ai_mode = self.ai_smart_scan_check.isChecked()
 
-        # Build the list of enabled checks from the UI
         check_class_map = {
             "SQL Injection": SqliCheck,
             "Cross-Site Scripting (XSS)": XssCheck,
             "Command Injection": CommandInjectionCheck,
             "Server-Side Request Forgery (SSRF)": SsrfCheck,
+            "XML External Entity (XXE)": XxeCheck,
+            "Insecure Deserialization": DeserializationCheck,
             "Insecure Direct Object References (IDOR)": IdorCheck,
             "Username Enumeration": UsernameEnumCheck,
         }
 
-        enabled_checks = []
-        for text, checkbox in self.check_boxes.items():
-            if checkbox.isChecked():
-                enabled_checks.append(check_class_map[text])
+        enabled_checks = [check_class_map[text] for text, cb in self.check_boxes.items() if cb.isChecked()]
 
         if not enabled_checks:
             QMessageBox.warning(self, "No Checks Selected", "Please select at least one vulnerability check to run.")
@@ -164,7 +169,7 @@ class ScannerTab(QWidget):
             return
 
         self.scanner_thread = ActiveScanner(
-            targets=targets,
+            request_data_list=self.imported_requests,
             enabled_checks=enabled_checks,
             ai_mode=ai_mode,
             ai_analyzer=self.main_window.ai_analyzer

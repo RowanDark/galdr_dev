@@ -1,6 +1,10 @@
 class BaseCheck:
-    def __init__(self, target_url, ai_mode=False, ai_analyzer=None):
-        self.target_url = target_url
+    def __init__(self, request_data, ai_mode=False, ai_analyzer=None):
+        self.request_data = request_data
+        self.target_url = request_data.get('url')
+        self.method = request_data.get('method', 'GET')
+        self.headers = request_data.get('headers', {})
+        self.body = request_data.get('body', '')
         self.ai_mode = ai_mode
         self.ai_analyzer = ai_analyzer
 
