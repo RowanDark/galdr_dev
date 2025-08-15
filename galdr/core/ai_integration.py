@@ -27,47 +27,36 @@ class FoundationSec8BIntegration:
         self.logger = logging.getLogger(__name__)
         
     def load_model(self):
-        """In this new architecture, we don't load the model directly. We just check if the endpoint is available."""
-        # A simple health check could be added here, but for now we assume it's running.
         self.model_loaded = True
         self.logger.info(f"Foundation-sec-8B integration ready (endpoint: {self.endpoint})")
         return True
 
     async def analyze_security_findings(self, findings: List[Dict], session: aiohttp.ClientSession) -> List[AIAnalysisResult]:
-        """Analyze security findings concurrently using the local AI model."""
         if not self.model_loaded:
             raise Exception("Foundation-sec-8B integration not initialized")
-
         tasks = [self._call_foundation_sec_model(finding, session) for finding in findings]
         results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        # Process results, handling potential errors from gather
         final_results = []
         for res in results:
             if isinstance(res, Exception):
                 self.logger.error(f"Error during AI analysis: {res}")
-                # Optionally create a result with an error message
                 final_results.append(AIAnalysisResult(finding_id="error", ai_reasoning=str(res)))
             else:
                 final_results.append(res)
-        
         return final_results
 
     def _create_analysis_prompt(self, finding: Dict) -> str:
-        """Creates a detailed prompt for the AI model to ensure a structured JSON response."""
         return f"""
         Analyze the following security finding and respond ONLY with a single, raw JSON object. Do not include markdown formatting or any text outside the JSON object.
-
         Finding Details:
         - Title: {finding.get('title', 'N/A')}
         - Severity: {finding.get('severity', 'N/A')}
         - URL: {finding.get('url', 'N/A')}
         - Evidence: {finding.get('evidence', 'N/A')}
-
         Based on the details, provide the following analysis in a JSON format with these exact keys:
         {{
             "severity_assessment": "Re-assess the severity (critical, high, medium, low, info)",
-            "confidence_score": "A float from 0.0 to 1.0 indicating your confidence in the analysis",
+            "confidence_score": 0.0,
             "attack_vectors": ["A list of potential attack vectors"],
             "remediation_priority": "A priority for remediation (e.g., 'Immediate', 'High', 'Medium', 'Low')",
             "exploitation_likelihood": "Likelihood of this being exploited (e.g., 'High', 'Medium', 'Low')",
@@ -77,85 +66,134 @@ class FoundationSec8BIntegration:
         """
 
     async def _call_foundation_sec_model(self, finding: Dict, session: aiohttp.ClientSession) -> AIAnalysisResult:
-        """Calls the local Ollama-style API to get analysis for a single finding."""
         prompt = self._create_analysis_prompt(finding)
-        data = {
-            "model": self.model_name,
-            "prompt": prompt,
-            "stream": False,
-            "format": "json" # Request JSON output from Ollama
-        }
-        
-        try:
-            async with session.post(self.endpoint, json=data, timeout=90) as response:
-                if response.status == 200:
-                    response_json = await response.json()
-                    analysis_json_str = response_json.get("response", "{}")
-                    analysis_data = json.loads(analysis_json_str)
-
-                    return AIAnalysisResult(
-                        finding_id=finding.get('id', 'unknown'),
-                        severity_assessment=analysis_data.get("severity_assessment", "N/A"),
-                        confidence_score=float(analysis_data.get("confidence_score", 0.0)),
-                        attack_vectors=analysis_data.get("attack_vectors", []),
-                        remediation_priority=analysis_data.get("remediation_priority", "N/A"),
-                        exploitation_likelihood=analysis_data.get("exploitation_likelihood", "N/A"),
-                        business_impact=analysis_data.get("business_impact", "N/A"),
-                        ai_reasoning=analysis_data.get("ai_reasoning", "No reasoning provided.")
-                    )
-                else:
-                    error_text = await response.text()
-                    self.logger.error(f"AI model API request failed with status {response.status}: {error_text}")
-                    raise Exception(f"API Error: {response.status} - {error_text}")
-        except asyncio.TimeoutError:
-            self.logger.error(f"Timeout calling AI model for finding: {finding.get('title')}")
-            raise Exception("Request to AI model timed out.")
-        except Exception as e:
-            self.logger.error(f"Exception calling AI model: {e}")
-            raise e
+        data = {"model": self.model_name, "prompt": prompt, "stream": False, "format": "json"}
+        async with session.post(self.endpoint, json=data, timeout=90) as response:
+            if response.status == 200:
+                response_json = await response.json()
+                analysis_json_str = response_json.get("response", "{}")
+                analysis_data = json.loads(analysis_json_str)
+                return AIAnalysisResult(finding_id=finding.get('id', 'unknown'), **analysis_data)
+            else:
+                error_text = await response.text()
+                self.logger.error(f"AI model API request failed with status {response.status}: {error_text}")
+                raise Exception(f"API Error: {response.status} - {error_text}")
 
     async def generate_payloads(self, prompt: str, session: aiohttp.ClientSession) -> List[str]:
-        """Calls the local Ollama-style API to generate payloads."""
-        data = {
-            "model": self.model_name,
-            "prompt": prompt,
-            "stream": False,
-            "format": "json"
-        }
-
-        try:
-            async with session.post(self.endpoint, json=data, timeout=60) as response:
-                if response.status == 200:
-                    response_json = await response.json()
-                    # The prompt asks for a JSON list of strings.
-                    payload_json_str = response_json.get("response", "[]")
-                    payloads = json.loads(payload_json_str)
-                    if isinstance(payloads, list):
-                        return [str(p) for p in payloads]
-                    else:
-                        self.logger.warning(f"AI returned non-list for payloads: {payloads}")
-                        return []
-                else:
-                    error_text = await response.text()
-                    self.logger.error(f"AI payload API request failed with status {response.status}: {error_text}")
-                    return []
-        except Exception as e:
-            self.logger.error(f"Exception calling AI for payload generation: {e}")
-            return []
-
+        data = {"model": self.model_name, "prompt": prompt, "stream": False, "format": "json"}
+        async with session.post(self.endpoint, json=data, timeout=60) as response:
+            if response.status == 200:
+                response_json = await response.json()
+                payload_json_str = response_json.get("response", "[]")
+                payloads = json.loads(payload_json_str)
+                return [str(p) for p in payloads] if isinstance(payloads, list) else []
+            else:
+                return []
 
 class CloudAPIIntegration:
-    # ... (CloudAPIIntegration can be implemented later, keeping the class structure)
     def __init__(self):
+        self.supported_providers = {
+            'openai': {'endpoint': 'https://api.openai.com/v1/chat/completions'},
+            'anthropic': {'endpoint': 'https://api.anthropic.com/v1/messages'},
+            'deepseek': {'endpoint': 'https://api.deepseek.com/v1/chat/completions'},
+            'gemini': {'endpoint': 'https://generativelanguage.googleapis.com/v1beta/models'},
+            'grok': {'endpoint': 'https://api.x.ai/v1/chat/completions'},
+            'ollama': {'endpoint': 'http://localhost:11434/api/generate'}
+        }
+        self.api_keys = {}
         self.logger = logging.getLogger(__name__)
-    async def analyze_with_cloud_ai(self, findings: List[Dict], provider: str, model: str) -> List[Dict]:
-        self.logger.warning("Cloud AI providers are not fully implemented yet.")
-        return [{'error': 'Not Implemented', 'finding': f['id']} for f in findings]
 
+    def set_api_key(self, provider: str, api_key: str):
+        self.api_keys[provider] = api_key
+
+    async def analyze_with_cloud_ai(self, findings: List[Dict], provider: str, model: str, session: aiohttp.ClientSession) -> List[Dict]:
+        if provider not in self.supported_providers:
+            raise ValueError(f"Unsupported provider: {provider}")
+
+        tasks = [self._call_api(finding, provider, model, session) for finding in findings]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        final_results = []
+        for i, res in enumerate(results):
+            if isinstance(res, Exception):
+                self.logger.error(f"API call failed for {provider}: {res}")
+                final_results.append({'error': str(res), 'finding_id': findings[i].get('id')})
+            else:
+                final_results.append(res)
+        return final_results
+
+    async def _call_api(self, finding: Dict, provider: str, model: str, session: aiohttp.ClientSession) -> Dict:
+        prompt = self._create_security_analysis_prompt(finding)
+        endpoint = self.supported_providers[provider]['endpoint']
+        api_key = self.api_keys.get(provider)
+
+        if provider != 'ollama' and not api_key:
+            raise ValueError(f"API key not set for provider: {provider}")
+
+        headers = {'Content-Type': 'application/json'}
+        data = {}
+
+        if provider == 'openai' or provider == 'deepseek' or provider == 'grok':
+            headers['Authorization'] = f"Bearer {api_key}"
+            data = {'model': model, 'messages': [{'role': 'user', 'content': prompt}], 'temperature': 0.1}
+        elif provider == 'anthropic':
+            headers.update({'x-api-key': api_key, 'anthropic-version': '2023-06-01'})
+            data = {'model': model, 'max_tokens': 1024, 'messages': [{'role': 'user', 'content': prompt}]}
+        elif provider == 'gemini':
+            endpoint += f"/{model}:generateContent?key={api_key}"
+            data = {'contents': [{'parts': [{'text': prompt}]}]}
+        elif provider == 'ollama':
+            data = {'model': model, 'prompt': prompt, 'stream': False, 'format': 'json'}
+
+        async with session.post(endpoint, headers=headers, json=data, timeout=90) as response:
+            response_json = await response.json()
+            if response.status == 200:
+                return self._parse_response(provider, response_json, finding)
+            else:
+                raise Exception(f"API Error {response.status}: {response_json}")
+
+    def _parse_response(self, provider, response_json, finding):
+        analysis_data = {}
+        try:
+            if provider == 'openai' or provider == 'deepseek' or provider == 'grok':
+                content = response_json['choices'][0]['message']['content']
+                analysis_data = json.loads(content)
+            elif provider == 'anthropic':
+                content = response_json['content'][0]['text']
+                analysis_data = json.loads(content)
+            elif provider == 'gemini':
+                content = response_json['candidates'][0]['content']['parts'][0]['text']
+                analysis_data = json.loads(content)
+            elif provider == 'ollama':
+                analysis_data = json.loads(response_json.get("response", "{}"))
+        except (json.JSONDecodeError, KeyError, IndexError) as e:
+            self.logger.error(f"Failed to parse AI response from {provider}: {e}\nResponse: {response_json}")
+            raise Exception("Failed to parse AI response")
+
+        return {'finding_id': finding.get('id'), **analysis_data}
+
+    def _create_security_analysis_prompt(self, finding: Dict) -> str:
+        # Same prompt as FoundationSec8BIntegration
+        return f"""
+        Analyze the following security finding and respond ONLY with a single, raw JSON object. Do not include markdown formatting or any text outside the JSON object.
+        Finding Details:
+        - Title: {finding.get('title', 'N/A')}
+        - Severity: {finding.get('severity', 'N/A')}
+        - URL: {finding.get('url', 'N/A')}
+        - Evidence: {finding.get('evidence', 'N/A')}
+        Based on the details, provide the following analysis in a JSON format with these exact keys:
+        {{
+            "severity_assessment": "Re-assess the severity (critical, high, medium, low, info)",
+            "confidence_score": 0.0,
+            "attack_vectors": ["A list of potential attack vectors"],
+            "remediation_priority": "A priority for remediation (e.g., 'Immediate', 'High', 'Medium', 'Low')",
+            "exploitation_likelihood": "Likelihood of this being exploited (e.g., 'High', 'Medium', 'Low')",
+            "business_impact": "A brief description of the potential business impact",
+            "ai_reasoning": "A concise explanation for your analysis"
+        }}
+        """
 
 class AISecurityAnalyzer(QObject):
-    """Main AI security analyzer that coordinates different AI backends"""
-    
     analysis_complete = pyqtSignal(list)
     analysis_progress = pyqtSignal(int, int)
     
@@ -168,17 +206,15 @@ class AISecurityAnalyzer(QObject):
         self.logger = logging.getLogger(__name__)
     
     def initialize(self):
-        """Initialize AI systems"""
         return self.foundation_ai.load_model()
     
     def set_provider(self, provider: str, model: str = None, api_key: str = None):
-        """Set AI provider and model"""
         self.current_provider = provider
         self.current_model = model or provider
-        # API key handling for cloud would go here
+        if api_key and provider != 'foundation-sec-8b':
+            self.cloud_ai.set_api_key(provider, api_key)
     
     async def analyze_findings(self, findings: List[Dict]) -> List[Dict]:
-        """Analyze security findings using configured AI provider."""
         if not findings:
             return []
         
@@ -189,38 +225,25 @@ class AISecurityAnalyzer(QObject):
                     return [result.__dict__ for result in results]
                 else:
                     return await self.cloud_ai.analyze_with_cloud_ai(
-                        findings, self.current_provider, self.current_model
+                        findings, self.current_provider, self.current_model, session
                     )
         except Exception as e:
             self.logger.error(f"AI analysis failed: {e}")
             return [{'error': str(e)} for _ in findings]
     
     def get_available_providers(self) -> Dict[str, List[str]]:
-        """Get list of available AI providers and models"""
-        # This can be expanded later
-        return {
-            'foundation-sec-8b': ['foundation-sec-8b (Local)']
-        }
+        return self.cloud_ai.supported_providers
 
     async def generate_payloads(self, context: Dict, check_type: str) -> List[str]:
-        """Generates contextual payloads using the configured AI provider."""
         prompt = self._create_payload_generation_prompt(context, check_type)
-
-        try:
-            async with aiohttp.ClientSession() as session:
-                # For now, we only implement this for the local/default provider
-                if self.current_provider == 'foundation-sec-8b':
-                    payloads = await self.foundation_ai.generate_payloads(prompt, session)
-                    return payloads
-                else:
-                    self.logger.warning(f"Payload generation for provider '{self.current_provider}' is not implemented yet.")
-                    return []
-        except Exception as e:
-            self.logger.error(f"AI payload generation failed: {e}")
-            return []
+        async with aiohttp.ClientSession() as session:
+            if self.current_provider == 'foundation-sec-8b':
+                return await self.foundation_ai.generate_payloads(prompt, session)
+            else:
+                self.logger.warning(f"Payload generation for cloud provider '{self.current_provider}' is not implemented yet.")
+                return []
 
     def _create_payload_generation_prompt(self, context: Dict, check_type: str) -> str:
-        """Creates a prompt for generating context-aware security payloads."""
         return f"""
         As a cybersecurity expert, generate a list of 5 creative, context-aware payloads for a '{check_type}' vulnerability check.
         The target parameter is '{context.get('param', 'unknown')}' in the URL '{context.get('url', 'unknown')}'.
