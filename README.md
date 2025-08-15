@@ -1,182 +1,81 @@
-# 🕷️ Galdr v2.0
-### Advanced AJAX Spider Tool with AI Security Analysis
+# Galdr: AI-Powered Cybersecurity Suite
 
-![Galdr Logo](assets/galdr_logo.png)
+![Galdr Logo](galdr/assets/galdr_logo.png)
 
-> A comprehensive web security crawler designed for cybersecurity professionals and bug bounty hunters, featuring AI-powered vulnerability analysis, real-time CVE monitoring, and intelligent reconnaissance capabilities.
+Galdr is a next-generation cybersecurity suite designed for penetration testers, bug bounty hunters, and security professionals. It integrates automated reconnaissance tools with powerful AI analysis capabilities to streamline the vulnerability discovery process.
 
-## 🌟 Features
+## Core Features
 
-### Core Functionality
-- **🔧 Per-Page Technology Detection** - Comprehensive tech stack analysis on every crawled page
-- **🔍 Passive Security Scanning** - Real-time vulnerability detection during crawls
-- **📸 Screenshot Capture** - Visual documentation of discovered pages
-- **🌐 Subdomain Enumeration** - Automated subdomain discovery for broader attack surface mapping
-- **🎯 Advanced URL Filtering** - Smart crawling with duplicate detection and content analysis
+-   **Intercepting Web Proxy:** Manipulate HTTP/S traffic in real-time. Features request/response interception, editing, and history logging. Built on a high-performance, stable `mitmproxy` core.
+-   **Advanced Web Crawler:** A sophisticated, Playwright-based crawler that can handle modern JavaScript-heavy web applications, discover pages, and enumerate subdomains.
+-   **AI-Powered Analysis:**
+    -   **AI Co-pilot:** An interactive chat interface to get real-time analysis of security findings, technology stacks, and scan strategies.
+    -   **Automated Analysis:** Automatically analyze discovered vulnerabilities to assess severity, determine attack vectors, and prioritize remediation.
+    -   **AI Payload Generation:** Generate creative, context-aware payloads for active scanner checks (e.g., SQLi) to enhance detection capabilities.
+    -   **Multi-Provider Support:** Supports local models via Ollama (e.g., `foundation-sec-8b`) and major cloud providers (OpenAI, Anthropic, Gemini, etc.).
+-   **Comprehensive Vulnerability Database:**
+    -   Builds a local, comprehensive database of all known CVEs by cloning and parsing the official MITRE CVE List.
+    -   Enriches this data by mapping CVEs to known public exploits from the Exploit-DB repository.
+-   **Active Vulnerability Scanner:**
+    -   Run active checks for common vulnerabilities like SQL Injection, XSS, and SSRF.
+    -   Leverages AI to generate dynamic payloads.
+-   **Project Management:**
+    -   Create user-specific project profiles to save scan configurations, targets, and history.
 
-### AI-Powered Analysis
-- **🤖 Foundation-sec-8B Integration** - Local AI security analysis (no API required)
-- **☁️ Multi-Provider Support** - OpenAI, Anthropic, DeepSeek, Google Gemini, xAI Grok
-- **🧠 AI Co-pilot Chat** - Interactive security guidance and vulnerability analysis
-- **📊 Intelligent Prioritization** - AI-powered risk assessment and remediation guidance
+## Setup and Installation
 
-### Security Intelligence
-- **🛡️ CVE Vulnerability Monitor** - Real-time vulnerability database updates
-- **📈 Risk Assessment** - Automated CVSS scoring and exploit availability tracking
-- **🚨 Critical Alerts** - Instant notifications for high-risk vulnerabilities
-- **📋 Compliance Reporting** - GDPR, SOX, HIPAA, PCI-DSS compliance analysis
+Follow these steps to get Galdr up and running on a Debian-based Linux system.
 
-### Project Management
-- **📁 Project Profiles** - Save and manage multiple target configurations
-- **📊 Scan History** - Comprehensive tracking of reconnaissance activities
-- **🎨 Professional Themes** - Multiple UI themes including custom Galdr branding
-- **👥 Multi-User Support** - Isolated workspaces for team collaboration
+### 1. Prerequisites
 
-## 🚀 Installation
+-   **Python:** Galdr requires Python 3.12 or newer.
+-   **Git:** Required for cloning the repository and the vulnerability databases.
+-   **Ollama (Recommended for AI features):** To use the powerful local AI features, you need to have Ollama installed and running.
+    -   Follow the official [Ollama installation guide](https://ollama.com/download).
 
-### Prerequisites
-- Python 3.8 or higher
-- Virtual environment (recommended)
+### 2. Installation
 
-### Setup Instructions
-
-1. **Clone the repository:**
-git clone https://github.com/yourusername/galdr.git
+```bash
+# Clone the repository
+git clone <repository_url>
 cd galdr
 
-text
+# Create and activate a Python virtual environment
+python3 -m venv venv
+source venv/bin/activate
 
-2. **Create and activate virtual environment:**
-python3 -m venv galdr-env
-source galdr-env/bin/activate # On Windows: galdr-env\Scripts\activate
-
-text
-
-3. **Install dependencies:**
+# Install the required Python packages
 pip install -r requirements.txt
 
-text
+# Install Playwright's browser dependencies
+playwright install
+```
 
-4. **Install Playwright browsers:**
-python -m playwright install chromium
+### 3. AI Model Setup (Recommended)
 
-text
+To enable the local AI analysis features, you need to pull the `foundation-sec-8b` model into your Ollama instance.
 
-5. **Run Galdr:**
-python main.py
+```bash
+# Pull the recommended security model
+ollama pull cisco/foundation-sec-8b-GGUF
+```
 
-text
+You can verify that the model is available by running `ollama list`.
 
-## 📋 Requirements
+### 4. Running Galdr
 
-PyQt6>=6.4.0
-playwright>=1.30.0
-beautifulsoup4>=4.11.0
-requests>=2.28.0
-pyyaml>=6.0
-cryptography>=3.4.8
-aiohttp>=3.12.0
+Once the installation and AI model setup are complete, you can run the application:
 
-text
+```bash
+# From the root directory of the project
+python3 -m galdr.main
+```
 
-## 🎯 Usage
+### 5. Using the Intercepting Proxy
 
-### Basic Crawling
-1. Launch Galdr and create a user account
-2. Enter target URL in the crawler tab
-3. Configure scan depth and options
-4. Enable desired features (screenshots, subdomain enum, passive scanning)
-5. Click "Start Crawl" to begin reconnaissance
-
-### AI-Powered Analysis
-1. Navigate to AI Settings tab
-2. Configure your preferred AI provider (Foundation-sec-8B enabled by default)
-3. Use the AI Co-pilot for real-time security guidance
-4. Run AI analysis on discovered vulnerabilities
-
-### Project Management
-1. Create project profiles for different targets
-2. Save scan configurations and results
-3. Track scan history and progress
-4. Export results for reporting
-
-### CVE Monitoring
-1. Access CVE Monitor tab for vulnerability intelligence
-2. Update CVE database for latest threat information
-3. Analyze detected technologies for known vulnerabilities
-4. Receive alerts for critical security issues
-
-## 🔧 Configuration
-
-### AI Providers Setup
-- **Foundation-sec-8B**: No configuration required (local model)
-- **OpenAI**: Add API key in AI Settings
-- **Google Gemini**: Configure API key for enhanced analysis
-- **xAI Grok**: Set up API access for unique AI perspective
-
-### Advanced Options
-- **Scan Depth**: 1-10 levels (default: 2)
-- **Request Delay**: 0-10 seconds between requests
-- **Screenshot Quality**: Full-page captures for documentation
-- **Proxy Support**: Route traffic through proxy servers
-
-## 🛡️ Security Features
-
-### Vulnerability Detection
-- **Passive Scanning**: Non-intrusive security analysis
-- **CVE Correlation**: Match technologies to known vulnerabilities
-- **OWASP Mapping**: Categorize findings by OWASP Top 10
-- **CWE Classification**: Detailed weakness categorization
-
-### AI Security Analysis
-- **Severity Assessment**: Intelligent risk prioritization
-- **Exploit Prediction**: Likelihood of successful exploitation
-- **Attack Vector Analysis**: Comprehensive threat modeling
-- **Remediation Guidance**: Actionable security recommendations
-
-## 📊 Output Formats
-
-- **Interactive UI**: Real-time results in professional interface
-- **Database Storage**: SQLite backend for data persistence
-- **Export Options**: JSON, CSV formats for external analysis
-- **Screenshot Archive**: Visual documentation of discoveries
-- **AI Reports**: Detailed security analysis and recommendations
-
-## 🤝 Contributing
-
-We welcome contributions to Galdr! Please see our contributing guidelines:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- **Cisco Foundation-sec-8B** - Open source security AI model
-- **Playwright Team** - Excellent browser automation framework
-- **PyQt6** - Professional desktop application framework
-- **Security Community** - Continuous feedback and improvements
-
-## 📞 Contact & Support
-
-- **GitHub Issues**: [Report bugs and feature requests](https://github.com/rowandark/galdr/issues)
-- **Documentation**: [Full documentation](https://github.com/rowandark/galdr/wiki)
-- **Security**: For security vulnerabilities, please email security@galdr.dev
-
-## 🔄 Version History
-
-- **v2.0** - AI integration, CVE monitoring, project profiles
-- **v1.5** - Enhanced technology detection, passive scanning
-- **v1.0** - Initial release with basic crawling functionality
-
----
-
-**Built for cybersecurity professionals by cybersecurity professionals** 🛡️
-
-*Galdr - Advanced reconnaissance for the modern security researcher*
+1.  Start Galdr and navigate to the **Proxy** tab.
+2.  Click **"Start Proxy"**. This will start the proxy on `localhost:8080`.
+3.  Click **"Export Galdr CA"** and save the certificate file.
+4.  Import the saved certificate file (`galdr_mitm_ca.pem`) into your browser's "Authorities" or "Trusted Root Certification Authorities" store. This is a crucial step to allow Galdr to intercept HTTPS traffic.
+5.  Configure your browser's proxy settings to use an HTTP proxy at `127.0.0.1` on port `8080`.
+6.  All traffic from your browser should now appear in Galdr's Proxy History tab.

@@ -411,6 +411,12 @@ class AdvancedCrawler(QThread):
                         
                 except Exception as e:
                     self.log_signal.emit(f"⚠️ Passive scan error on {current_url}: {str(e)}")
+
+            # Find the corresponding request to enrich the results
+            main_request = next((req for req in reversed(self.network_monitor.requests) if req['url'] == current_url), None)
+            if main_request:
+                page_data['method'] = main_request.get('method', 'GET')
+                page_data['request_headers'] = main_request.get('headers', {})
             
             self.update_signal.emit(page_data)
             

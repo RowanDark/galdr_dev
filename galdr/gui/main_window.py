@@ -111,7 +111,10 @@ class MainWindow(QMainWindow):
                 content_hash TEXT,
                 status_code INTEGER,
                 screenshot TEXT,
-                scan_session_id TEXT
+                scan_session_id TEXT,
+                method TEXT,
+                request_headers TEXT,
+                request_body TEXT
             )""",
             """CREATE TABLE IF NOT EXISTS technologies (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -162,7 +165,10 @@ class MainWindow(QMainWindow):
             "ALTER TABLE technologies ADD COLUMN detection_method TEXT",
             "ALTER TABLE technologies ADD COLUMN timestamp INTEGER",
             "ALTER TABLE technologies ADD COLUMN scan_session_id TEXT",
-            "ALTER TABLE security_findings ADD COLUMN scan_session_id TEXT"
+            "ALTER TABLE security_findings ADD COLUMN scan_session_id TEXT",
+            "ALTER TABLE results ADD COLUMN method TEXT",
+            "ALTER TABLE results ADD COLUMN request_headers TEXT",
+            "ALTER TABLE results ADD COLUMN request_body TEXT"
         ]
         
         for alter_query in alter_queries:
@@ -702,10 +708,32 @@ class MainWindow(QMainWindow):
         return 0
     
     def get_cve_count(self):
-        """Get count of CVE vulnerabilities found in the current analysis."""
-        if hasattr(self, 'cve_monitor_tab'):
-            return self.cve_monitor_tab.vulnerability_table.rowCount()
-        return 0
+        """Get count of CVE vulnerabilities found for the current session's technologies."""
+        if not hasattr(self, 'cve_monitor_tab'):
+            return 0
+        try:
+            # Get the technologies detected in the current scan session
+            query = QSqlQuery(self.db)
+            query.prepare("SELECT DISTINCT tech_name, version FROM technologies WHERE scan_session_id = ?")
+            query.addBindValue(self.session_id)
+            if not query.exec():
+                return 0
+
+            technologies = {}
+            while query.next():
+                tech_name = query.value(0)
+                version = query.value(1) or ''
+                technologies[tech_name] = {'version': version}
+
+            if not technologies:
+                return 0
+
+            # Get the vulnerability summary for these technologies
+            summary = self.cve_monitor_tab.cve_manager.get_vulnerability_summary(technologies)
+            return summary.get('total_vulnerabilities', 0)
+        except Exception as e:
+            self.logger.error(f"Failed to get CVE count: {e}")
+            return 0
     
     def get_recent_activity(self):
         """Get recent activity summary"""
@@ -1047,8 +1075,8 @@ class MainWindow(QMainWindow):
             
             query = QSqlQuery(self.db)
             query.prepare("""
-                INSERT INTO results (url, title, timestamp, depth, content_hash, status_code, screenshot, scan_session_id) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO results (url, title, timestamp, depth, content_hash, status_code, screenshot, scan_session_id, method, request_headers, request_body)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """)
             query.addBindValue(page_data['url'])
             query.addBindValue(page_data.get('title', ''))
@@ -1058,6 +1086,9 @@ class MainWindow(QMainWindow):
             query.addBindValue(page_data.get('status_code', 200))
             query.addBindValue(page_data.get('screenshot', ''))
             query.addBindValue(self.session_id)
+            query.addBindValue(page_data.get('method', 'GET'))
+            query.addBindValue(json.dumps(page_data.get('request_headers', {})))
+            query.addBindValue(page_data.get('request_body', ''))
             
             if not query.exec():
                 error_msg = query.lastError().text()
