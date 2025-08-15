@@ -24,6 +24,7 @@ from .scanner_tab import ScannerTab
 from .decoder_tab import DecoderTab
 from .comparer_tab import ComparerTab
 from .proxy_tab import ProxyTab
+from .raider_tab import RaiderTab
 
 class MainWindow(QMainWindow):
     def __init__(self, authenticated_user):
@@ -235,6 +236,10 @@ class MainWindow(QMainWindow):
         # Add repeater tab to widget after proxy
         self.tab_widget.addTab(self.repeater_tab, "🔄 Repeater")
         
+        # Raider tab
+        self.raider_tab = RaiderTab()
+        self.tab_widget.addTab(self.raider_tab, "🏴‍☠️ Raider")
+
         # AI Settings tab
         self.ai_settings_panel = AISettingsPanel()
         self.ai_settings_panel.ai_settings_changed.connect(self.update_ai_settings)
