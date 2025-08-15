@@ -1,26 +1,20 @@
 # Galdr Active Vulnerability Scanner
 # This module will contain the core logic for managing and running active scan checks.
 
-from galdr.scanner.checks.sqli_check import SqliCheck
-from galdr.scanner.checks.xss_check import XssCheck
-from galdr.scanner.checks.command_injection_check import CommandInjectionCheck
-from galdr.scanner.checks.ssrf_check import SsrfCheck
-from galdr.scanner.checks.idor_check import IdorCheck
-from galdr.scanner.checks.username_enum_check import UsernameEnumCheck
 from PyQt6.QtCore import QObject, pyqtSignal, QThread
 
 class ActiveScanner(QThread):
     vulnerability_found = pyqtSignal(object)
     scan_finished = pyqtSignal(int)
 
-    def __init__(self, targets, ai_mode=False, ai_analyzer=None):
+    def __init__(self, targets, enabled_checks, ai_mode=False, ai_analyzer=None):
         super().__init__()
         self.targets = targets
         self.ai_mode = ai_mode
         self.ai_analyzer = ai_analyzer
         self.running = False
-        self.checks_to_run = [SqliCheck, XssCheck, CommandInjectionCheck, SsrfCheck, IdorCheck, UsernameEnumCheck] # A list of check classes to run
-        print(f"Active Scanner initialized. AI Mode: {self.ai_mode}")
+        self.checks_to_run = enabled_checks # Use the list passed from the UI
+        print(f"Active Scanner initialized with {len(self.checks_to_run)} checks. AI Mode: {self.ai_mode}")
 
     def run(self):
         self.running = True

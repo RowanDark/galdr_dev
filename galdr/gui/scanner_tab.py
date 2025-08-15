@@ -1,9 +1,16 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QTableWidget,
-    QTableWidgetItem, QHeaderView, QGroupBox, QTextEdit, QMessageBox
+    QTableWidgetItem, QHeaderView, QGroupBox, QTextEdit, QMessageBox,
+    QGridLayout, QCheckBox
 )
 from PyQt6.QtSql import QSqlQuery
 from galdr.scanner.active_scanner import ActiveScanner
+from galdr.scanner.checks.sqli_check import SqliCheck
+from galdr.scanner.checks.xss_check import XssCheck
+from galdr.scanner.checks.command_injection_check import CommandInjectionCheck
+from galdr.scanner.checks.ssrf_check import SsrfCheck
+from galdr.scanner.checks.idor_check import IdorCheck
+from galdr.scanner.checks.username_enum_check import UsernameEnumCheck
 
 class ScannerTab(QWidget):
     def __init__(self, main_window, db, parent=None):
@@ -41,6 +48,33 @@ class ScannerTab(QWidget):
 
         controls_group.setLayout(controls_layout)
         layout.addWidget(controls_group)
+
+        # Scan Configuration
+        config_group = QGroupBox("Scan Configuration")
+        config_layout = QGridLayout()
+
+        # A mapping from checkbox to the check class
+        self.check_boxes = {
+            "SQL Injection": QCheckBox("SQL Injection"),
+            "Cross-Site Scripting (XSS)": QCheckBox("Cross-Site Scripting (XSS)"),
+            "Command Injection": QCheckBox("Command Injection"),
+            "Server-Side Request Forgery (SSRF)": QCheckBox("Server-Side Request Forgery (SSRF)"),
+            "Insecure Direct Object References (IDOR)": QCheckBox("Insecure Direct Object References (IDOR)"),
+            "Username Enumeration": QCheckBox("Username Enumeration"),
+        }
+
+        # Add checkboxes to the layout
+        row, col = 0, 0
+        for text, checkbox in self.check_boxes.items():
+            checkbox.setChecked(True) # Enable all by default
+            config_layout.addWidget(checkbox, row, col)
+            col += 1
+            if col > 2: # 3 columns
+                col = 0
+                row += 1
+
+        config_group.setLayout(config_layout)
+        layout.addWidget(config_group)
 
         # Targets Area
         targets_group = QGroupBox("Targets (one per line)")
@@ -108,8 +142,30 @@ class ScannerTab(QWidget):
 
         ai_mode = self.ai_smart_scan_check.isChecked()
 
+        # Build the list of enabled checks from the UI
+        check_class_map = {
+            "SQL Injection": SqliCheck,
+            "Cross-Site Scripting (XSS)": XssCheck,
+            "Command Injection": CommandInjectionCheck,
+            "Server-Side Request Forgery (SSRF)": SsrfCheck,
+            "Insecure Direct Object References (IDOR)": IdorCheck,
+            "Username Enumeration": UsernameEnumCheck,
+        }
+
+        enabled_checks = []
+        for text, checkbox in self.check_boxes.items():
+            if checkbox.isChecked():
+                enabled_checks.append(check_class_map[text])
+
+        if not enabled_checks:
+            QMessageBox.warning(self, "No Checks Selected", "Please select at least one vulnerability check to run.")
+            self.start_scan_button.setEnabled(True)
+            self.stop_scan_button.setEnabled(False)
+            return
+
         self.scanner_thread = ActiveScanner(
             targets=targets,
+            enabled_checks=enabled_checks,
             ai_mode=ai_mode,
             ai_analyzer=self.main_window.ai_analyzer
         )
