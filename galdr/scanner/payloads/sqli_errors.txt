@@ -1,13 +1,32 @@
+# Generic Errors
 You have an error in your SQL syntax
 unclosed quotation mark
-supplied argument is not a valid MySQL result
+unterminated string literal
+Syntax error
+
+# MySQL
+supplied argument is not a valid MySQL
+check the manual that corresponds to your MySQL server version
+Unknown column
+
+# PostgreSQL
 PostgreSQL query failed
-Microsoft OLE DB Provider for ODBC Drivers error
-Oracle error
-DB2 SQL error
+unterminated quoted string
+syntax error at or near
+
+# Oracle
+ORA-009
+ORA-01756
+ORA-01741
+
+# MSSQL
+Unclosed quotation mark after the character string
+Incorrect syntax near
+Conversion failed when converting the nvarchar value
+
+# SQLite
 SQLite error
-Informix
-Syntax error in string
-unterminated string
-nvarchar
-conversion failed
+near " ": syntax error
+
+# Informix
+Informix ODBC Driver

