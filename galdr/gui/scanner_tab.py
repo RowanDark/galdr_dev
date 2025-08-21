@@ -193,3 +193,14 @@ class ScannerTab(QWidget):
         self.results_table.setItem(row_position, 1, QTableWidgetItem(finding.check_name))
         self.results_table.setItem(row_position, 2, QTableWidgetItem(finding.parameter))
         self.results_table.setItem(row_position, 3, QTableWidgetItem(finding.severity))
+
+    def add_target_request(self, request_data):
+        """Adds a single request to the scanner queue from an external source like the crawler."""
+        # Filter out static files and check for duplicates
+        url = request_data.get("url", "")
+        if not any(url.lower().endswith(ext) for ext in ['.css', '.js', '.png', '.jpg', '.gif']) and '?' in url:
+            # Check if this exact URL is already in our list for display
+            existing_urls = self.targets_text.toPlainText().split('\n')
+            if url not in existing_urls:
+                self.imported_requests.append(request_data)
+                self.targets_text.append(url)

@@ -1069,6 +1069,7 @@ class MainWindow(QMainWindow):
         )
         
         self.crawler.update_signal.connect(self.update_results)
+        self.crawler.update_signal.connect(self.scanner_tab.add_target_request) # Connect to scanner
         self.crawler.tech_signal.connect(self.update_tech_display)
         self.crawler.log_signal.connect(self.append_log)
         self.crawler.progress_signal.connect(self.update_progress)
