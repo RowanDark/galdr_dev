@@ -6,8 +6,8 @@ import time
 import re
 
 class SsrfCheck(BaseCheck):
-    def __init__(self, target_url, ai_mode=False, ai_analyzer=None):
-        super().__init__(target_url, ai_mode, ai_analyzer)
+    def __init__(self, request_data, ai_mode=False, ai_analyzer=None):
+        super().__init__(request_data, ai_mode, ai_analyzer)
         self.payloads = self.load_payloads()
 
     def load_payloads(self):
@@ -59,8 +59,8 @@ class SsrfCheck(BaseCheck):
                 start_time = time.time()
                 try:
                     # Send the request with a timeout slightly longer than the expected delay
-                    requests.get(test_url, timeout=expected_delay + 2)
-                except requests.exceptions.ReadTimeout:
+                    response = requests.get(test_url, timeout=expected_delay + 2, verify=False)
+                except requests.exceptions.ReadTimeout as e:
                     # A timeout is the expected outcome for a successful time-based check
                     elapsed_time = time.time() - start_time
                     if elapsed_time >= detection_threshold:
@@ -73,7 +73,9 @@ class SsrfCheck(BaseCheck):
                                 f"The application took {elapsed_time:.2f} seconds to respond after injecting a payload "
                                 f"designed to take at least {expected_delay} seconds. This indicates a potential "
                                 f"time-based SSRF vulnerability."
-                            )
+                            ),
+                            request=e.request,
+                            response=None
                         )
                         findings.append(finding)
                         # Once a vulnerability is found for a parameter, move to the next one

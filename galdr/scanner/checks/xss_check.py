@@ -6,8 +6,8 @@ import html
 import asyncio
 
 class XssCheck(BaseCheck):
-    def __init__(self, target_url, ai_mode=False, ai_analyzer=None):
-        super().__init__(target_url, ai_mode, ai_analyzer)
+    def __init__(self, request_data, ai_mode=False, ai_analyzer=None):
+        super().__init__(request_data, ai_mode, ai_analyzer)
         self.payloads = self.load_payloads()
 
     def load_payloads(self):
@@ -64,7 +64,9 @@ class XssCheck(BaseCheck):
                             check_name="Reflected Cross-Site Scripting (XSS)",
                             parameter=param,
                             severity="High",
-                            details=f"Payload '{payload}' was reflected in the response without proper HTML encoding."
+                            details=f"Payload '{payload}' was reflected in the response without proper HTML encoding.",
+                            request=response.request,
+                            response=response
                         )
                         findings.append(finding)
                         # Stop after first finding for this parameter

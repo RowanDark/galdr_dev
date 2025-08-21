@@ -5,8 +5,8 @@ import os
 import time
 
 class CommandInjectionCheck(BaseCheck):
-    def __init__(self, target_url):
-        super().__init__(target_url)
+    def __init__(self, request_data, ai_mode=False, ai_analyzer=None):
+        super().__init__(request_data, ai_mode, ai_analyzer)
         self.payloads = self.load_payloads()
         self.sleep_duration = 5 # Corresponds to the 'sleep 5' in payloads
 
@@ -60,7 +60,7 @@ class CommandInjectionCheck(BaseCheck):
 
                 try:
                     start_time = time.time()
-                    requests.get(test_url, timeout=15) # Higher timeout to allow for sleep
+                    response = requests.get(test_url, timeout=15) # Higher timeout to allow for sleep
                     end_time = time.time()
 
                     response_time = end_time - start_time
@@ -73,7 +73,9 @@ class CommandInjectionCheck(BaseCheck):
                             check_name="Time-based Command Injection",
                             parameter=param,
                             severity="High",
-                            details=f"Response took {response_time:.2f}s after injecting payload '{payload}', which is significantly longer than the baseline of {baseline_time:.2f}s."
+                            details=f"Response took {response_time:.2f}s after injecting payload '{payload}', which is significantly longer than the baseline of {baseline_time:.2f}s.",
+                            request=response.request,
+                            response=response
                         )
                         findings.append(finding)
                         break # Move to next parameter

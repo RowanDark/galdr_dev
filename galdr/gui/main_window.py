@@ -2,6 +2,7 @@ import sys
 import logging
 import uuid
 import time
+import json
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QTableView, QTextEdit, QSpinBox,
@@ -149,6 +150,8 @@ class MainWindow(QMainWindow):
                 cwe_id TEXT,
                 owasp_category TEXT,
                 ai_analysis TEXT,
+                request TEXT,
+                response TEXT,
                 timestamp INTEGER,
                 scan_session_id TEXT
             )"""
@@ -168,6 +171,8 @@ class MainWindow(QMainWindow):
             "ALTER TABLE technologies ADD COLUMN timestamp INTEGER",
             "ALTER TABLE technologies ADD COLUMN scan_session_id TEXT",
             "ALTER TABLE security_findings ADD COLUMN scan_session_id TEXT",
+            "ALTER TABLE security_findings ADD COLUMN request TEXT",
+            "ALTER TABLE security_findings ADD COLUMN response TEXT",
             "ALTER TABLE results ADD COLUMN method TEXT",
             "ALTER TABLE results ADD COLUMN request_headers TEXT",
             "ALTER TABLE results ADD COLUMN request_body TEXT"
@@ -476,6 +481,11 @@ class MainWindow(QMainWindow):
         self.security_view = QTableView()
         self.security_view.setModel(self.security_model)
         self.security_view.resizeColumnsToContents()
+
+        # Add context menu for "Send to Repeater"
+        self.security_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.security_view.customContextMenuRequested.connect(self.show_security_context_menu)
+
         layout.addWidget(QLabel("🔍 Security Findings:"))
         layout.addWidget(self.security_view)
 
@@ -834,6 +844,61 @@ class MainWindow(QMainWindow):
         """Called when any setting changes"""
         pass
     
+    def show_security_context_menu(self, position):
+        """Show context menu for the security findings table."""
+        try:
+            index = self.security_view.indexAt(position)
+            if not index.isValid():
+                return
+
+            menu = QMenu()
+            send_to_repeater_action = QAction("🔄 Send to Repeater", self)
+            send_to_repeater_action.triggered.connect(self.send_finding_to_repeater)
+            menu.addAction(send_to_repeater_action)
+
+            menu.exec(self.security_view.mapToGlobal(position))
+
+        except Exception as e:
+            self.append_log(f"❌ Security context menu error: {str(e)}")
+
+    def send_finding_to_repeater(self):
+        """Send the request from a security finding to the Repeater tab."""
+        selected_indexes = self.security_view.selectionModel().selectedRows()
+        if not selected_indexes:
+            QMessageBox.information(self, "No Selection", "Please select a finding to send to Repeater.")
+            return
+
+        try:
+            row = selected_indexes[0].row()
+
+            # Column indices must be known and stable
+            url_col_index = 1
+            request_col_index = 11
+
+            url_index = self.security_model.index(row, url_col_index)
+            url = self.security_model.data(url_index, Qt.ItemDataRole.DisplayRole)
+
+            request_index = self.security_model.index(row, request_col_index)
+            request_str = self.security_model.data(request_index, Qt.ItemDataRole.DisplayRole)
+
+            if not request_str:
+                QMessageBox.warning(self, "No Request Data", "The selected finding does not have detailed request data.")
+                return
+
+            # The request string is a serialized dictionary
+            request_data = json.loads(request_str)
+
+            self.repeater_tab.load_request(request_data)
+            self.tab_widget.setCurrentWidget(self.repeater_tab)
+            self.append_log(f"📤 Sent finding for {url} to Repeater")
+
+        except json.JSONDecodeError:
+            self.append_log("❌ Error: Could not parse request data. Is it valid JSON?")
+            QMessageBox.critical(self, "Error", "Could not parse the request data stored for this finding.")
+        except Exception as e:
+            self.append_log(f"❌ Error sending finding to Repeater: {str(e)}")
+            QMessageBox.critical(self, "Error", f"Failed to send finding to Repeater: {str(e)}")
+
     def change_theme(self, theme_name):
         """Change application theme"""
         success = self.theme_manager.apply_theme(theme_name)
@@ -1138,18 +1203,20 @@ class MainWindow(QMainWindow):
             query = QSqlQuery(self.db)
             query.prepare("""
                 INSERT INTO security_findings 
-                (url, finding_title, severity, confidence, description, evidence, remediation, cwe_id, owasp_category, timestamp, scan_session_id) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (url, finding_title, severity, confidence, description, evidence, remediation, cwe_id, owasp_category, request, response, timestamp, scan_session_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """)
             query.addBindValue(url)
-            query.addBindValue(finding['title'])
-            query.addBindValue(finding['severity'])
-            query.addBindValue(finding['confidence'])
-            query.addBindValue(finding['description'])
-            query.addBindValue(finding['evidence'])
-            query.addBindValue(finding['remediation'])
-            query.addBindValue(finding.get('cwe_id', ''))
-            query.addBindValue(finding.get('owasp_category', ''))
+            query.addBindValue(finding.title)
+            query.addBindValue(finding.severity)
+            query.addBindValue(finding.confidence)
+            query.addBindValue(finding.description)
+            query.addBindValue(finding.evidence)
+            query.addBindValue(finding.remediation)
+            query.addBindValue(finding.cwe_id)
+            query.addBindValue(finding.owasp_category)
+            query.addBindValue(finding.request)
+            query.addBindValue(finding.response)
             query.addBindValue(int(time.time()))
             query.addBindValue(self.session_id)
             

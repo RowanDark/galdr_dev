@@ -4,16 +4,15 @@ from .base_check import BaseCheck, Vulnerability
 import time
 
 class IdorCheck(BaseCheck):
-    def __init__(self, target_url, ai_mode=False, ai_analyzer=None):
-        super().__init__(target_url, ai_mode, ai_analyzer)
+    def __init__(self, request_data, ai_mode=False, ai_analyzer=None):
+        super().__init__(request_data, ai_mode, ai_analyzer)
 
     def get_response_details(self, url):
-        """Gets the status code and content length of a response."""
+        """Gets the full response object."""
         try:
-            response = requests.get(url, timeout=10)
-            return response.status_code, len(response.content)
+            return requests.get(url, timeout=10, verify=False)
         except requests.exceptions.RequestException:
-            return -1, -1
+            return None
 
     def run(self):
         """
@@ -28,9 +27,10 @@ class IdorCheck(BaseCheck):
             return findings
 
         # Get baseline response
-        baseline_status, baseline_length = self.get_response_details(self.target_url)
-        if baseline_status != 200:
+        baseline_response = self.get_response_details(self.target_url)
+        if not baseline_response or baseline_response.status_code != 200:
             return findings # Only test on successful pages
+        baseline_length = len(baseline_response.content)
 
         for param, values in query_params.items():
             original_value = values[0]
@@ -52,18 +52,20 @@ class IdorCheck(BaseCheck):
                 new_query = urlencode(test_params, doseq=True)
                 test_url = urlunparse(parsed_url._replace(query=new_query))
 
-                status, length = self.get_response_details(test_url)
+                response = self.get_response_details(test_url)
 
                 # Check for potential IDOR
                 # Condition: The page still loads (200 OK) but the content length is different
                 # This is a simple heuristic and might have false positives/negatives.
-                if status == 200 and length > 0 and abs(length - baseline_length) > (baseline_length * 0.1):
+                if response and response.status_code == 200 and len(response.content) > 0 and abs(len(response.content) - baseline_length) > (baseline_length * 0.1):
                     finding = Vulnerability(
                         url=self.target_url,
                         check_name="Insecure Direct Object Reference (IDOR)",
                         parameter=param,
                         severity="High",
-                        details=f"Accessing object with ID {test_int} returned a 200 OK with a different content length ({length} bytes) than the original ({baseline_length} bytes)."
+                        details=f"Accessing object with ID {test_int} returned a 200 OK with a different content length ({len(response.content)} bytes) than the original ({baseline_length} bytes).",
+                        request=response.request,
+                        response=response
                     )
                     findings.append(finding)
                     break # Found a vulnerability for this param, move to the next

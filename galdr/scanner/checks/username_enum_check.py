@@ -5,8 +5,8 @@ import os
 import uuid
 
 class UsernameEnumCheck(BaseCheck):
-    def __init__(self, target_url, ai_mode=False, ai_analyzer=None):
-        super().__init__(target_url, ai_mode, ai_analyzer)
+    def __init__(self, request_data, ai_mode=False, ai_analyzer=None):
+        super().__init__(request_data, ai_mode, ai_analyzer)
         self.usernames = self.load_usernames()
         # Common parameter names for login forms
         self.username_params = ['username', 'user', 'email', 'login', 'user_id']
@@ -65,7 +65,9 @@ class UsernameEnumCheck(BaseCheck):
                         check_name="Username Enumeration",
                         parameter=user_param,
                         severity="Medium",
-                        details=f"The response for username '{user}' was significantly different from the response for a non-existent user, suggesting the username is valid."
+                        details=f"The response for username '{user}' was significantly different from the response for a non-existent user, suggesting the username is valid.",
+                        request=response_test.request,
+                        response=response_test
                     )
                     findings.append(finding)
                     # Don't break, continue to find all valid usernames from the list

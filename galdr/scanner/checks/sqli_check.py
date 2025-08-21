@@ -7,8 +7,8 @@ import re
 import asyncio
 
 class SqliCheck(BaseCheck):
-    def __init__(self, target_url, ai_mode=False, ai_analyzer=None):
-        super().__init__(target_url, ai_mode, ai_analyzer)
+    def __init__(self, request_data, ai_mode=False, ai_analyzer=None):
+        super().__init__(request_data, ai_mode, ai_analyzer)
         self.error_patterns = self.load_payloads('sqli_errors.txt')
         self.time_based_payloads = self.load_payloads('sqli_time_based_payloads.txt')
 
@@ -69,7 +69,9 @@ class SqliCheck(BaseCheck):
                         check_name="Error-based SQL Injection",
                         parameter=param,
                         severity="High",
-                        details=f"Found SQL error pattern '{pattern}' in response after injecting payload."
+                        details=f"Found SQL error pattern '{pattern}' in response after injecting payload.",
+                        request=response.request,
+                        response=response
                     )
         except requests.exceptions.RequestException:
             pass # Ignore connection errors
@@ -91,9 +93,10 @@ class SqliCheck(BaseCheck):
             test_url = urlunparse(parsed_url._replace(query=new_query))
 
             start_time = time.time()
+            response = None
             try:
-                requests.get(test_url, timeout=expected_delay + 2, verify=False)
-            except requests.exceptions.ReadTimeout:
+                response = requests.get(test_url, timeout=expected_delay + 2, verify=False)
+            except requests.exceptions.ReadTimeout as e:
                 elapsed_time = time.time() - start_time
                 if elapsed_time >= detection_threshold:
                     return Vulnerability(
@@ -101,7 +104,9 @@ class SqliCheck(BaseCheck):
                         check_name="Blind SQL Injection (Time-Based)",
                         parameter=param,
                         severity="High",
-                        details=f"The application took {elapsed_time:.2f} seconds to respond after injecting a time-based SQLi payload."
+                        details=f"The application took {elapsed_time:.2f} seconds to respond after injecting a time-based SQLi payload.",
+                        request=e.request, # Get request from the exception
+                        response=None
                     )
             except requests.exceptions.RequestException:
                 continue

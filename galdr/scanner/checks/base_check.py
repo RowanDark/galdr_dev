@@ -16,12 +16,14 @@ class BaseCheck:
         raise NotImplementedError("Subclasses must implement the 'run' method.")
 
 class Vulnerability:
-    def __init__(self, url, check_name, parameter, severity, details):
+    def __init__(self, url, check_name, parameter, severity, details, request=None, response=None):
         self.url = url
         self.check_name = check_name
         self.parameter = parameter
         self.severity = severity
         self.details = details
+        self.request = request   # The full request that triggered the finding
+        self.response = response # The full response that confirmed the finding
 
     def __repr__(self):
-        return f"Vulnerability(check='{self.check_name}', url='{self.url}', param='{self.parameter}')"
+        return f"Vulnerability(check='{self.check_name}', url='{self.url}', param='{self.parameter}', severity='{self.severity}')"
