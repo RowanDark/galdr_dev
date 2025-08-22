@@ -20,6 +20,7 @@ from gui.project_profiles_tab import ProjectProfilesTab
 from gui.cve_monitor_tab import CVEMonitorTab
 from gui.ai_copilot_tab import AICoPilotTab
 from gui.scanner_tab import ScannerTab
+from gui.proxy_tab import ProxyTab
 from core.project_manager import ScanSettings, UserPreferences
 
 class MainWindow(QMainWindow):
@@ -212,6 +213,10 @@ class MainWindow(QMainWindow):
         self.scanner_tab = ScannerTab(self.repeater_tab, self)
         self.tab_widget.addTab(self.scanner_tab, "🔬 Active Scanner")
         
+        # Proxy Tab
+        self.proxy_tab = ProxyTab(self)
+        self.tab_widget.addTab(self.proxy_tab, "📡 Proxy")
+
         # AI Settings tab
         self.ai_settings_panel = AISettingsPanel()
         self.ai_settings_panel.ai_settings_changed.connect(self.update_ai_settings)

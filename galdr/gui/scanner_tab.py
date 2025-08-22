@@ -94,15 +94,22 @@ class ScannerTab(QWidget):
                 key, value = line.split(':', 1)
                 headers[key.strip()] = value.strip()
 
-        self.base_request = {
+        request_data = {
             'url': url,
             'method': method,
             'headers': headers,
             'body': body
         }
+        self.load_request(request_data, "Repeater")
+
+    def load_request(self, request_data, source="Proxy"):
+        self.base_request = request_data
+
+        url = request_data['url']
+        method = request_data['method']
 
         self.request_info_label.setText(f"Loaded: {method} {url}")
-        self.log_message(f"Request loaded from Repeater: {method} {url}")
+        self.log_message(f"Request loaded from {source}: {method} {url}")
         self.start_btn.setEnabled(True)
 
     def start_scan(self):
