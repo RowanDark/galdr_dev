@@ -10,6 +10,7 @@ class PluginManager:
         self.proxy_request_hooks = []
         self.proxy_response_hooks = []
         self.custom_tabs = {}
+        self.scanner_checks = []
 
     def load_plugins(self):
         """
@@ -48,6 +49,7 @@ class PluginManager:
                             self.proxy_request_hooks.extend(api._proxy_request_hooks)
                             self.proxy_response_hooks.extend(api._proxy_response_hooks)
                             self.custom_tabs.update(api._custom_tabs)
+                            self.scanner_checks.extend(api._scanner_checks)
                             print(f"Successfully loaded plugin: {plugin_instance.name}")
 
                 except Exception as e:
@@ -61,3 +63,6 @@ class PluginManager:
 
     def get_custom_tabs(self):
         return self.custom_tabs
+
+    def get_scanner_checks(self):
+        return self.scanner_checks

@@ -10,6 +10,11 @@ class PluginAPI:
         self._proxy_request_hooks = []
         self._proxy_response_hooks = []
         self._custom_tabs = {}
+        self._scanner_checks = []
+
+    def register_scanner_check(self, check_class: Any):
+        """Register a custom scanner check."""
+        self._scanner_checks.append(check_class)
 
     def register_proxy_request_hook(self, func: Callable):
         """Register a function to be called on every HTTP request."""

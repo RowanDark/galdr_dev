@@ -1,3 +1,4 @@
+import json
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QTableWidget,
     QTableWidgetItem, QHeaderView, QGroupBox, QTextEdit, QMessageBox,
@@ -15,13 +16,16 @@ from galdr.scanner.checks.xxe_check import XxeCheck
 from galdr.scanner.checks.deserialization_check import DeserializationCheck
 
 class ScannerTab(QWidget):
-    def __init__(self, main_window, db, parent=None):
+    def __init__(self, main_window, db, plugin_manager, parent=None):
         super().__init__(parent)
-        self.main_window = main_window # To access ai_analyzer
+        self.main_window = main_window
         self.db = db
+        self.plugin_manager = plugin_manager
         self.scanner_thread = None
-        self.imported_requests = [] # To store full request data
+        self.imported_requests = []
+        self.check_class_map = {}
         self.init_ui()
+        self.load_plugin_checks()
 
     def init_ui(self):
         """Initialize the UI for the Active Scanner tab."""
@@ -57,28 +61,36 @@ class ScannerTab(QWidget):
         config_layout = QGridLayout()
 
         # A mapping from checkbox to the check class
-        self.check_boxes = {
-            "SQL Injection": QCheckBox("SQL Injection"),
-            "Cross-Site Scripting (XSS)": QCheckBox("Cross-Site Scripting (XSS)"),
-            "Command Injection": QCheckBox("Command Injection"),
-            "Server-Side Request Forgery (SSRF)": QCheckBox("Server-Side Request Forgery (SSRF)"),
-            "XML External Entity (XXE)": QCheckBox("XML External Entity (XXE)"),
-            "Insecure Deserialization": QCheckBox("Insecure Deserialization"),
-            "Insecure Direct Object References (IDOR)": QCheckBox("Insecure Direct Object References (IDOR)"),
-            "Username Enumeration": QCheckBox("Username Enumeration"),
+        self.check_boxes = {}
+
+        # Built-in checks
+        self.check_class_map = {
+            "SQL Injection": SqliCheck,
+            "Cross-Site Scripting (XSS)": XssCheck,
+            "Command Injection": CommandInjectionCheck,
+            "Server-Side Request Forgery (SSRF)": SsrfCheck,
+            "XML External Entity (XXE)": XxeCheck,
+            "Insecure Deserialization": DeserializationCheck,
+            "Insecure Direct Object References (IDOR)": IdorCheck,
+            "Username Enumeration": UsernameEnumCheck,
         }
 
+        # Create checkboxes for built-in checks
+        for name in self.check_class_map.keys():
+            self.check_boxes[name] = QCheckBox(name)
+            self.check_boxes[name].setChecked(True)
+
         # Add checkboxes to the layout
+        self.config_layout = QGridLayout()
         row, col = 0, 0
-        for text, checkbox in self.check_boxes.items():
-            checkbox.setChecked(True) # Enable all by default
-            config_layout.addWidget(checkbox, row, col)
+        for checkbox in self.check_boxes.values():
+            self.config_layout.addWidget(checkbox, row, col)
             col += 1
             if col > 2: # 3 columns
                 col = 0
                 row += 1
 
-        config_group.setLayout(config_layout)
+        config_group.setLayout(self.config_layout)
         layout.addWidget(config_group)
 
         # Targets Area
@@ -149,18 +161,7 @@ class ScannerTab(QWidget):
 
         ai_mode = self.ai_smart_scan_check.isChecked()
 
-        check_class_map = {
-            "SQL Injection": SqliCheck,
-            "Cross-Site Scripting (XSS)": XssCheck,
-            "Command Injection": CommandInjectionCheck,
-            "Server-Side Request Forgery (SSRF)": SsrfCheck,
-            "XML External Entity (XXE)": XxeCheck,
-            "Insecure Deserialization": DeserializationCheck,
-            "Insecure Direct Object References (IDOR)": IdorCheck,
-            "Username Enumeration": UsernameEnumCheck,
-        }
-
-        enabled_checks = [check_class_map[text] for text, cb in self.check_boxes.items() if cb.isChecked()]
+        enabled_checks = [self.check_class_map[text] for text, cb in self.check_boxes.items() if cb.isChecked()]
 
         if not enabled_checks:
             QMessageBox.warning(self, "No Checks Selected", "Please select at least one vulnerability check to run.")
@@ -193,6 +194,33 @@ class ScannerTab(QWidget):
         self.results_table.setItem(row_position, 1, QTableWidgetItem(finding.check_name))
         self.results_table.setItem(row_position, 2, QTableWidgetItem(finding.parameter))
         self.results_table.setItem(row_position, 3, QTableWidgetItem(finding.severity))
+
+    def load_plugin_checks(self):
+        """Loads scanner checks from plugins and adds them to the UI."""
+        plugin_checks = self.plugin_manager.get_scanner_checks()
+        if not plugin_checks:
+            return
+
+        row, col = len(self.check_boxes) % 3, len(self.check_boxes) // 3
+
+        for check_class in plugin_checks:
+            # We need a name for the check. Let's assume the class has a 'name' attribute.
+            check_name = getattr(check_class, 'name', check_class.__name__)
+
+            if check_name in self.check_class_map:
+                print(f"Warning: Scanner check '{check_name}' from plugin conflicts with an existing check. Skipping.")
+                continue
+
+            self.check_class_map[check_name] = check_class
+            checkbox = QCheckBox(f"🔌 {check_name}")
+            checkbox.setChecked(True)
+            self.check_boxes[check_name] = checkbox
+
+            self.config_layout.addWidget(checkbox, row, col)
+            col += 1
+            if col > 2:
+                col = 0
+                row += 1
 
     def add_target_request(self, request_data):
         """Adds a single request to the scanner queue from an external source like the crawler."""

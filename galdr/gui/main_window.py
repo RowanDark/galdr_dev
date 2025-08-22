@@ -197,7 +197,7 @@ class MainWindow(QMainWindow):
         self.init_crawler_tab()
 
         # Scanner tab
-        self.scanner_tab = ScannerTab(main_window=self, db=self.db)
+        self.scanner_tab = ScannerTab(main_window=self, db=self.db, plugin_manager=self.plugin_manager)
         self.tab_widget.addTab(self.scanner_tab, "🎯 Active Scan")
         
         # Results tab
