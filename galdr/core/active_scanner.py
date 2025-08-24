@@ -36,6 +36,7 @@ class ActiveSecurityScanner(QObject):
             ("XPath Injection", self.check_xpath_injection),
             ("XML Injection", self.check_xml_injection),
             ("Reflected XSS", self.check_reflected_xss),
+            ("SQL Injection", self.check_sql_injection),
         ]
         self._stop_scan = False
 
@@ -121,6 +122,13 @@ class ActiveSecurityScanner(QObject):
                 "'\"--><img src=x onerror=alert('GaldrXSS')>",
                 "<svg/onload=alert('GaldrXSS')>",
                 "javascript:alert('GaldrXSS')",
+            ],
+            "SQL Injection": [
+                "'",
+                "\"",
+                "\\",
+                "'))",
+                "';",
             ]
         }
         return payloads.get(check_name, [])
@@ -221,6 +229,37 @@ class ActiveSecurityScanner(QObject):
                     payload,
                     param_name,
                     "CWE-79"
+                )
+                return True
+        return False
+
+    async def check_sql_injection(self, base_request, payload, param_name):
+        # Error-based SQLi detection
+        error_patterns = [
+            re.compile(r"SQL syntax.*?MySQL|Fatal error.*?mysql", re.I),
+            re.compile(r"You have an error in your SQL syntax", re.I),
+            re.compile(r"Unclosed quotation mark after the character string", re.I),
+            re.compile(r"quoted string not properly terminated", re.I),
+            re.compile(r"Microsoft OLE DB Provider for ODBC Drivers", re.I),
+            re.compile(r"Microsoft OLE DB Provider for SQL Server", re.I),
+            re.compile(r"Oracle error", re.I),
+            re.compile(r"ORA-[0-9][0-9][0-9][0-9]", re.I),
+            re.compile(r"PostgreSQL.*?ERROR", re.I),
+            re.compile(r"System\.Data\.SqlClient\.SqlException", re.I),
+        ]
+
+        response = await self._send_request(base_request, payload)
+
+        for pattern in error_patterns:
+            if pattern.search(response['text']):
+                self.emit_finding(
+                    "SQL Injection",
+                    "High",
+                    "Firm",
+                    response,
+                    payload,
+                    param_name,
+                    "CWE-89"
                 )
                 return True
         return False
