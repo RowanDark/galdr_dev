@@ -65,10 +65,10 @@ class TestMiscChecks(unittest.TestCase):
         ]
 
         # Act
-        original_checks = scanner.checks
-        scanner.checks = [("Command Injection", scanner.check_command_injection)]
+        original_checks = scanner.builtin_checks
+        scanner.builtin_checks = [("Command Injection", scanner.check_command_injection)]
         scanner.run_scan()
-        scanner.checks = original_checks
+        scanner.builtin_checks = original_checks
 
         # Assert
         self.assertEqual(len(findings), 1)

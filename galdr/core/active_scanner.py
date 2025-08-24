@@ -1,5 +1,8 @@
 import asyncio
 import re
+import os
+import importlib.util
+import inspect
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
@@ -7,17 +10,8 @@ from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
 from PyQt6.QtCore import QObject, pyqtSignal
 from playwright.async_api import async_playwright
 
-
-@dataclass
-class SecurityFinding:
-    severity: str
-    confidence: str
-    title: str
-    description: str
-    evidence: str
-    remediation: str
-    cwe_id: Optional[str] = None
-    owasp_category: Optional[str] = None
+from galdr.checks.api import BaseActiveCheck
+from galdr.core.finding import SecurityFinding
 
 
 class ActiveSecurityScanner(QObject):
@@ -30,7 +24,8 @@ class ActiveSecurityScanner(QObject):
         super().__init__()
         self.request_data = request_data
         self.browser = None
-        self.checks = [
+
+        self.builtin_checks = [
             ("File Path Traversal", self.check_file_path_traversal),
             ("LDAP Injection", self.check_ldap_injection),
             ("XPath Injection", self.check_xpath_injection),
@@ -39,11 +34,38 @@ class ActiveSecurityScanner(QObject):
             ("SQL Injection", self.check_sql_injection),
             ("Command Injection", self.check_command_injection),
         ]
+        self.custom_checks = []
+        self.load_custom_checks()
+
         self._stop_scan = False
 
     def stop(self):
         self._stop_scan = True
         self.log_message.emit("Scan stop requested.")
+
+    def load_custom_checks(self):
+        """Dynamically loads custom active checks from the custom_checks directory."""
+        custom_checks_path = "galdr/custom_checks"
+        if not os.path.exists(custom_checks_path):
+            return
+
+        for filename in os.listdir(custom_checks_path):
+            if filename.endswith(".py") and not filename.startswith("__"):
+                filepath = os.path.join(custom_checks_path, filename)
+                module_name = f"galdr.custom_checks.{filename[:-3]}"
+
+                try:
+                    spec = importlib.util.spec_from_file_location(module_name, filepath)
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+
+                    for name, obj in inspect.getmembers(module, inspect.isclass):
+                        if issubclass(obj, BaseActiveCheck) and obj is not BaseActiveCheck:
+                            self.custom_checks.append(obj())
+                            self.log_message.emit(f"Loaded custom active check: {obj.name}")
+
+                except Exception as e:
+                    self.log_message.emit(f"Error loading custom active check {filename}: {e}")
 
     def run_scan(self):
         self._stop_scan = False
@@ -64,16 +86,24 @@ class ActiveSecurityScanner(QObject):
                 await self.browser.close()
                 return
 
-            payload_counts = {name: len(self._get_payloads_for_check(name)) for name, _ in self.checks}
-            total_requests = len(injection_points) * sum(payload_counts.values())
+            # Calculate total requests
+            total_requests = 0
+            for name, _ in self.builtin_checks:
+                total_requests += len(self._get_payloads_for_check(name))
+            for check in self.custom_checks:
+                total_requests += len(check.payloads)
+            total_requests *= len(injection_points)
+
             self.log_message.emit(f"Starting active scan with {total_requests} requests.")
 
             progress = 0
             for point in injection_points:
                 if self._stop_scan: break
                 self.log_message.emit(f"Scanning parameter: {point['param_name']}")
+                base_request = self._create_base_request_for_point(point)
 
-                for check_name, check_method in self.checks:
+                # Run built-in checks
+                for check_name, check_method in self.builtin_checks:
                     if self._stop_scan: break
                     payloads = self._get_payloads_for_check(check_name)
                     found_for_this_check = False
@@ -83,11 +113,30 @@ class ActiveSecurityScanner(QObject):
                             self.scan_progress.emit(progress, total_requests)
                             continue
 
-                        base_request = self._create_base_request_for_point(point)
                         if await check_method(base_request, payload, point['param_name']):
                             found_for_this_check = True
                         progress += 1
                         self.scan_progress.emit(progress, total_requests)
+
+                # Run custom checks
+                for custom_check in self.custom_checks:
+                    if self._stop_scan: break
+                    found_for_this_check = False
+                    for payload in custom_check.payloads:
+                        if self._stop_scan or found_for_this_check:
+                            progress += 1
+                            self.scan_progress.emit(progress, total_requests)
+                            continue
+
+                        finding = await custom_check.run(base_request, payload, self._send_request)
+                        if finding:
+                            # Re-emit the finding through the scanner's signal
+                            self.finding_detected.emit({'url': finding.url, 'finding': finding.__dict__})
+                            found_for_this_check = True
+
+                        progress += 1
+                        self.scan_progress.emit(progress, total_requests)
+
 
             await self.browser.close()
         self.log_message.emit("Active scan finished.")

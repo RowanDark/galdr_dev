@@ -32,7 +32,10 @@ class TestActiveSecurityScanner(unittest.TestCase):
         }
 
         # Act
+        original_checks = self.scanner.builtin_checks
+        self.scanner.builtin_checks = [("File Path Traversal", self.scanner.check_file_path_traversal)]
         self.scanner.run_scan()
+        self.scanner.builtin_checks = original_checks
 
         # Assert
         self.assertEqual(len(self.findings), 1)

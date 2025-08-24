@@ -2,20 +2,15 @@ import re
 import json
 import base64
 import hashlib
+import os
+import importlib.util
+import inspect
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 from PyQt6.QtCore import QObject, pyqtSignal
 
-@dataclass
-class SecurityFinding:
-    severity: str  # critical, high, medium, low, info
-    confidence: str  # certain, firm, tentative
-    title: str
-    description: str
-    evidence: str
-    remediation: str
-    cwe_id: Optional[str] = None
-    owasp_category: Optional[str] = None
+from galdr.checks.api import BasePassiveCheck
+from galdr.core.finding import SecurityFinding
 
 class PassiveSecurityScanner(QObject):
     finding_detected = pyqtSignal(dict)  # Emits SecurityFinding data
@@ -35,7 +30,33 @@ class PassiveSecurityScanner(QObject):
             self.check_business_logic_exposure,
             self.check_csrf_protection,
         ]
+        self.load_custom_checks()
     
+    def load_custom_checks(self):
+        """Dynamically loads custom passive checks from the custom_checks directory."""
+        custom_checks_path = "galdr/custom_checks"
+        if not os.path.exists(custom_checks_path):
+            return
+
+        for filename in os.listdir(custom_checks_path):
+            if filename.endswith(".py") and not filename.startswith("__"):
+                filepath = os.path.join(custom_checks_path, filename)
+                module_name = f"galdr.custom_checks.{filename[:-3]}"
+
+                try:
+                    spec = importlib.util.spec_from_file_location(module_name, filepath)
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+
+                    for name, obj in inspect.getmembers(module, inspect.isclass):
+                        if issubclass(obj, BasePassiveCheck) and obj is not BasePassiveCheck:
+                            custom_check_instance = obj()
+                            self.checks.append(custom_check_instance.run)
+                            print(f"Loaded custom passive check: {custom_check_instance.name}")
+
+                except Exception as e:
+                    print(f"Error loading custom check {filename}: {e}")
+
     def analyze_response(self, url: str, response_headers: Dict, response_body: str, 
                         request_headers: Dict = None) -> List[SecurityFinding]:
         """Analyze HTTP response for security vulnerabilities"""

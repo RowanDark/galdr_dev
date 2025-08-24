@@ -29,10 +29,10 @@ class TestSQLiChecks(unittest.TestCase):
         }
 
         # Act
-        original_checks = self.scanner.checks
-        self.scanner.checks = [("SQL Injection", self.scanner.check_sql_injection)]
+        original_checks = self.scanner.builtin_checks
+        self.scanner.builtin_checks = [("SQL Injection", self.scanner.check_sql_injection)]
         self.scanner.run_scan()
-        self.scanner.checks = original_checks
+        self.scanner.builtin_checks = original_checks
 
         # Assert
         self.assertEqual(len(self.findings), 1)
@@ -54,10 +54,10 @@ class TestSQLiChecks(unittest.TestCase):
         }
 
         # Act
-        original_checks = self.scanner.checks
-        self.scanner.checks = [("SQL Injection", self.scanner.check_sql_injection)]
+        original_checks = self.scanner.builtin_checks
+        self.scanner.builtin_checks = [("SQL Injection", self.scanner.check_sql_injection)]
         self.scanner.run_scan()
-        self.scanner.checks = original_checks
+        self.scanner.builtin_checks = original_checks
 
         # Assert
         self.assertEqual(len(self.findings), 0)

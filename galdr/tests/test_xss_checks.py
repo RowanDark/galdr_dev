@@ -2,8 +2,9 @@ import unittest
 import asyncio
 from unittest.mock import patch, MagicMock, AsyncMock
 
-from galdr.core.passive_scanner import PassiveSecurityScanner, SecurityFinding as PassiveFinding
-from galdr.core.active_scanner import ActiveSecurityScanner, SecurityFinding as ActiveFinding
+from galdr.core.passive_scanner import PassiveSecurityScanner
+from galdr.core.active_scanner import ActiveSecurityScanner
+from galdr.core.finding import SecurityFinding
 
 class TestXSSChecks(unittest.TestCase):
 
@@ -60,10 +61,10 @@ class TestXSSChecks(unittest.TestCase):
         # Act
         # We need to run the scan, but only for the XSS check to be efficient
         # A bit of a workaround: temporarily replace checks
-        original_checks = scanner.checks
-        scanner.checks = [("Reflected XSS", scanner.check_reflected_xss)]
+        original_checks = scanner.builtin_checks
+        scanner.builtin_checks = [("Reflected XSS", scanner.check_reflected_xss)]
         scanner.run_scan()
-        scanner.checks = original_checks # restore
+        scanner.builtin_checks = original_checks # restore
 
         # Assert
         self.assertEqual(len(findings), 1)
