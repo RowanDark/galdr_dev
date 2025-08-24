@@ -35,6 +35,7 @@ class ActiveSecurityScanner(QObject):
             ("LDAP Injection", self.check_ldap_injection),
             ("XPath Injection", self.check_xpath_injection),
             ("XML Injection", self.check_xml_injection),
+            ("Reflected XSS", self.check_reflected_xss),
         ]
         self._stop_scan = False
 
@@ -114,6 +115,12 @@ class ActiveSecurityScanner(QObject):
                 "<![CDATA[<test>inject</test>]]>",
                 "<foo><bar>baz</bar></foo>",
                 "<!-- an XML comment -->",
+            ],
+            "Reflected XSS": [
+                "<script>alert('GaldrXSS')</script>",
+                "'\"--><img src=x onerror=alert('GaldrXSS')>",
+                "<svg/onload=alert('GaldrXSS')>",
+                "javascript:alert('GaldrXSS')",
             ]
         }
         return payloads.get(check_name, [])
@@ -195,6 +202,27 @@ class ActiveSecurityScanner(QObject):
         if response['status'] != 200 and any(p.search(response['text']) for p in patterns):
             self.emit_finding("XML Injection", "Medium", "Tentative", response, payload, param_name, "CWE-91")
             return True
+        return False
+
+    async def check_reflected_xss(self, base_request, payload, param_name):
+        response = await self._send_request(base_request, payload)
+
+        # Simple check: does the payload appear in the response?
+        # A more advanced check would parse HTML and check for execution context.
+        if payload in response['text']:
+            # Extra check for content type to reduce false positives
+            content_type = response['headers'].get('content-type', '').lower()
+            if 'html' in content_type:
+                self.emit_finding(
+                    "Reflected Cross-Site Scripting (XSS)",
+                    "High",
+                    "Tentative",
+                    response,
+                    payload,
+                    param_name,
+                    "CWE-79"
+                )
+                return True
         return False
 
     def emit_finding(self, title, severity, confidence, response, payload, param_name, cwe_id):

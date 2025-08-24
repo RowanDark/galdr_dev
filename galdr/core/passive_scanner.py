@@ -153,16 +153,7 @@ class PassiveSecurityScanner(QObject):
                 ))
         
         # Content Security Policy
-        if 'content-security-policy' not in headers_lower:
-            findings.append(SecurityFinding(
-                severity="medium",
-                confidence="firm",
-                title="Missing Content Security Policy",
-                description="No CSP header found, may be vulnerable to XSS attacks",
-                evidence="Content-Security-Policy header not present",
-                remediation="Implement a restrictive Content Security Policy",
-                cwe_id="CWE-79"
-            ))
+        findings.extend(self._check_csp(headers_lower.get('content-security-policy')))
         
         # HTTPS Strict Transport Security
         if url.startswith('https://') and 'strict-transport-security' not in headers_lower:
@@ -176,6 +167,50 @@ class PassiveSecurityScanner(QObject):
                 cwe_id="CWE-319"
             ))
         
+        return findings
+
+    def _check_csp(self, csp_header: Optional[str]) -> List[SecurityFinding]:
+        """Check a Content-Security-Policy header for weaknesses."""
+        findings = []
+        if not csp_header:
+            findings.append(SecurityFinding(
+                severity="medium",
+                confidence="firm",
+                title="Missing Content Security Policy",
+                description="No CSP header found, may be vulnerable to XSS attacks",
+                evidence="Content-Security-Policy header not present",
+                remediation="Implement a restrictive Content Security Policy",
+                cwe_id="CWE-79"
+            ))
+            return findings
+
+        # Check for weak directives that allow unsafe inline/eval
+        weak_directives = ["'unsafe-inline'", "'unsafe-eval'"]
+        for directive in weak_directives:
+            if directive in csp_header:
+                findings.append(SecurityFinding(
+                    severity="medium",
+                    confidence="firm",
+                    title="Weak Content Security Policy",
+                    description=f"CSP allows {directive}, which may lead to XSS vulnerabilities.",
+                    evidence=f"CSP: {csp_header}",
+                    remediation=f"Avoid using {directive} in your Content Security Policy.",
+                    cwe_id="CWE-79"
+                ))
+
+        # Check for overly broad sources like '*'
+        # A simple string check is not perfect but good enough for a first pass.
+        if "script-src *" in csp_header or "default-src *" in csp_header:
+             findings.append(SecurityFinding(
+                severity="low",
+                confidence="firm",
+                title="Permissive Content Security Policy",
+                description="CSP uses a wildcard ('*') source for scripts, which is overly permissive.",
+                evidence=f"CSP: {csp_header}",
+                remediation="Specify explicit sources instead of using wildcards in your CSP's script-src or default-src.",
+                cwe_id="CWE-79"
+            ))
+
         return findings
     
     def check_cookie_security(self, url, headers, body, req_headers) -> List[SecurityFinding]:
