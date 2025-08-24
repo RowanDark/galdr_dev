@@ -37,6 +37,7 @@ class ActiveSecurityScanner(QObject):
             ("XML Injection", self.check_xml_injection),
             ("Reflected XSS", self.check_reflected_xss),
             ("SQL Injection", self.check_sql_injection),
+            ("Command Injection", self.check_command_injection),
         ]
         self._stop_scan = False
 
@@ -129,6 +130,13 @@ class ActiveSecurityScanner(QObject):
                 "\\",
                 "'))",
                 "';",
+            ],
+            "Command Injection": [
+                "&& sleep 10",
+                "| sleep 10",
+                "; sleep 10",
+                "& timeout /t 10 /nobreak",
+                "| timeout /t 10 /nobreak",
             ]
         }
         return payloads.get(check_name, [])
@@ -161,18 +169,34 @@ class ActiveSecurityScanner(QObject):
             body = body.replace('FUZZ', payload)
 
         try:
+            start_time = asyncio.get_event_loop().time()
             response = await page.request.fetch(
                 target_url,
                 method=base_request['method'],
                 headers=base_request['headers'],
                 data=body.encode('utf-8') if body else None,
-                timeout=10000
+                timeout=20000 # Increased timeout for time-based tests
             )
+            end_time = asyncio.get_event_loop().time()
             response_text = await response.text()
-            return {'status': response.status, 'text': response_text, 'headers': dict(response.headers),
-                    'payload': payload, 'url': target_url}
+            return {
+                'status': response.status,
+                'text': response_text,
+                'headers': dict(response.headers),
+                'payload': payload,
+                'url': target_url,
+                'response_time_sec': end_time - start_time
+            }
         except Exception as e:
-            return {'status': -1, 'text': str(e), 'headers': {}, 'payload': payload, 'url': target_url}
+            end_time = asyncio.get_event_loop().time()
+            return {
+                'status': -1,
+                'text': str(e),
+                'headers': {},
+                'payload': payload,
+                'url': target_url,
+                'response_time_sec': end_time - start_time
+            }
         finally:
             await context.close()
 
@@ -181,7 +205,8 @@ class ActiveSecurityScanner(QObject):
         response = await self._send_request(base_request, payload)
         for pattern in patterns:
             if pattern.search(response['text']):
-                self.emit_finding("File Path Traversal", "High", "Firm", response, payload, param_name, "CWE-22")
+                self.emit_finding("File Path Traversal", "High", "Firm", response, payload, param_name, "CWE-22",
+                                  "The application seems to be vulnerable to File Path Traversal. Validate user input and sanitize file paths.")
                 return True
         return False
 
@@ -190,7 +215,8 @@ class ActiveSecurityScanner(QObject):
         response = await self._send_request(base_request, payload)
         for pattern in patterns:
             if pattern.search(response['text']):
-                self.emit_finding("LDAP Injection", "High", "Tentative", response, payload, param_name, "CWE-90")
+                self.emit_finding("LDAP Injection", "High", "Tentative", response, payload, param_name, "CWE-90",
+                                  "The application may be vulnerable to LDAP Injection. Use parameterized queries or safe LDAP APIs.")
                 return True
         return False
 
@@ -200,7 +226,8 @@ class ActiveSecurityScanner(QObject):
         response = await self._send_request(base_request, payload)
         for pattern in patterns:
             if pattern.search(response['text']):
-                self.emit_finding("XPath Injection", "High", "Firm", response, payload, param_name, "CWE-643")
+                self.emit_finding("XPath Injection", "High", "Firm", response, payload, param_name, "CWE-643",
+                                  "The application may be vulnerable to XPath Injection. Use parameterized XPath queries.")
                 return True
         return False
 
@@ -208,33 +235,22 @@ class ActiveSecurityScanner(QObject):
         patterns = [re.compile(r"XML Parsing Error|Invalid XML|not well-formed", re.I)]
         response = await self._send_request(base_request, payload)
         if response['status'] != 200 and any(p.search(response['text']) for p in patterns):
-            self.emit_finding("XML Injection", "Medium", "Tentative", response, payload, param_name, "CWE-91")
+            self.emit_finding("XML Injection", "Medium", "Tentative", response, payload, param_name, "CWE-91",
+                              "The application may be vulnerable to XML Injection. Implement proper XML validation and parsing.")
             return True
         return False
 
     async def check_reflected_xss(self, base_request, payload, param_name):
         response = await self._send_request(base_request, payload)
-
-        # Simple check: does the payload appear in the response?
-        # A more advanced check would parse HTML and check for execution context.
         if payload in response['text']:
-            # Extra check for content type to reduce false positives
             content_type = response['headers'].get('content-type', '').lower()
             if 'html' in content_type:
-                self.emit_finding(
-                    "Reflected Cross-Site Scripting (XSS)",
-                    "High",
-                    "Tentative",
-                    response,
-                    payload,
-                    param_name,
-                    "CWE-79"
-                )
+                self.emit_finding("Reflected Cross-Site Scripting (XSS)", "High", "Tentative", response, payload, param_name, "CWE-79",
+                                  "The application may be vulnerable to Reflected XSS. Implement context-aware output encoding and a strong Content Security Policy.")
                 return True
         return False
 
     async def check_sql_injection(self, base_request, payload, param_name):
-        # Error-based SQLi detection
         error_patterns = [
             re.compile(r"SQL syntax.*?MySQL|Fatal error.*?mysql", re.I),
             re.compile(r"You have an error in your SQL syntax", re.I),
@@ -247,31 +263,42 @@ class ActiveSecurityScanner(QObject):
             re.compile(r"PostgreSQL.*?ERROR", re.I),
             re.compile(r"System\.Data\.SqlClient\.SqlException", re.I),
         ]
-
         response = await self._send_request(base_request, payload)
-
         for pattern in error_patterns:
             if pattern.search(response['text']):
-                self.emit_finding(
-                    "SQL Injection",
-                    "High",
-                    "Firm",
-                    response,
-                    payload,
-                    param_name,
-                    "CWE-89"
-                )
+                self.emit_finding("SQL Injection", "High", "Firm", response, payload, param_name, "CWE-89",
+                                  "The application may be vulnerable to SQL Injection. Use parameterized queries (prepared statements).")
                 return True
         return False
 
-    def emit_finding(self, title, severity, confidence, response, payload, param_name, cwe_id):
+    async def check_command_injection(self, base_request, payload, param_name):
+        sleep_duration = 10
+        baseline_response = await self._send_request(base_request, "GaldrBaselineCheck")
+        baseline_time = baseline_response['response_time_sec']
+        timed_response = await self._send_request(base_request, payload)
+        timed_time = timed_response['response_time_sec']
+        if (timed_time - baseline_time) > (sleep_duration - 2):
+            self.emit_finding("Command Injection", "High", "Firm", timed_response, payload, param_name, "CWE-77",
+                              "The application may be vulnerable to time-based Command Injection. Avoid calling OS commands directly with user input.",
+                              evidence_format="Payload: {payload}\nResponse took {response_time_sec:.2f} seconds.")
+            return True
+        return False
+
+    def emit_finding(self, title, severity, confidence, response, payload, param_name, cwe_id, remediation, evidence_format="Payload: {payload}\nResponse snippet:\n{response_text:.200}"):
+
+        evidence = evidence_format.format(
+            payload=payload,
+            response_text=response.get('text', ''),
+            response_time_sec=response.get('response_time_sec', 0)
+        )
+
         finding = SecurityFinding(
             severity=severity,
             confidence=confidence,
             title=title,
             description=f"A potential {title} vulnerability was found in the '{param_name}' parameter.",
-            evidence=f"Payload: {payload}\nResponse snippet:\n{response['text'][:200]}",
-            remediation="Validate and sanitize all user-supplied input. Use parameterized queries or safe APIs.",
+            evidence=evidence,
+            remediation=remediation,
             cwe_id=cwe_id,
             owasp_category="A03:2021-Injection"
         )

@@ -32,7 +32,8 @@ class PassiveSecurityScanner(QObject):
             self.check_session_management,
             self.check_input_validation_hints,
             self.check_error_handling,
-            self.check_business_logic_exposure
+            self.check_business_logic_exposure,
+            self.check_csrf_protection,
         ]
     
     def analyze_response(self, url: str, response_headers: Dict, response_body: str, 
@@ -262,6 +263,38 @@ class PassiveSecurityScanner(QObject):
                     cwe_id="CWE-352"
                 ))
         
+        return findings
+
+    def check_csrf_protection(self, url, headers, body, req_headers) -> List[SecurityFinding]:
+        """Check for missing anti-CSRF tokens in forms."""
+        findings = []
+
+        # Only check HTML responses
+        content_type = headers.get('Content-Type', '').lower()
+        if 'html' not in content_type:
+            return findings
+
+        # Find all POST forms
+        post_form_pattern = re.compile(r'<form.*?method=["\']?post["\']?.*?>.*?</form>', re.IGNORECASE | re.DOTALL)
+        forms = post_form_pattern.finditer(body)
+
+        # Pattern for a likely CSRF token
+        csrf_token_pattern = re.compile(r'<input.*?type=["\']?hidden["\']?.*?(name|id)=["\'].*?(csrf|token|nonce|auth).*?["\']', re.IGNORECASE)
+
+        for i, form_match in enumerate(forms):
+            form_html = form_match.group(0)
+            if not csrf_token_pattern.search(form_html):
+                findings.append(SecurityFinding(
+                    severity="medium",
+                    confidence="tentative",
+                    title="Missing Anti-CSRF Token",
+                    description="A form was found without a likely anti-CSRF token. This could make the application vulnerable to Cross-Site Request Forgery attacks.",
+                    evidence=f"Form #{i+1} on {url}:\n{form_html[:200]}...",
+                    remediation="Implement anti-CSRF tokens (e.g., using a hidden input field with a random value) for all state-changing requests.",
+                    cwe_id="CWE-352",
+                    owasp_category="A01:2021-Broken Access Control"
+                ))
+
         return findings
     
     def check_information_disclosure(self, url, headers, body, req_headers) -> List[SecurityFinding]:
