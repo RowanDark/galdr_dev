@@ -62,6 +62,7 @@ class RepeaterTab(QWidget):
     
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.main_window = parent
         self.init_ui()
         self.original_response = None
         self.response_history = []
@@ -147,6 +148,10 @@ class RepeaterTab(QWidget):
         self.save_original_btn.clicked.connect(self.save_as_original)
         button_layout.addWidget(self.save_original_btn)
         
+        self.send_to_raider_btn = QPushButton("Send to Raider")
+        self.send_to_raider_btn.clicked.connect(self.send_to_raider)
+        button_layout.addWidget(self.send_to_raider_btn)
+
         layout.addLayout(button_layout)
         return request_group
     
@@ -334,6 +339,27 @@ class RepeaterTab(QWidget):
         if self.response_history:
             self.original_response = self.response_history[-1].copy()
             self.response_info.setText("📌 Current response saved as original")
+
+    def send_to_raider(self):
+        """Sends the current request data to the Raider tab."""
+        if not self.main_window:
+            return
+
+        headers = {}
+        for line in self.headers_editor.toPlainText().split('\n'):
+            if ':' in line and line.strip():
+                key, value = line.split(':', 1)
+                headers[key.strip()] = value.strip()
+
+        request_data = {
+            'method': self.method_combo.currentText(),
+            'url': self.url_input.text(),
+            'headers': headers,
+            'body': self.body_editor.toPlainText()
+        }
+
+        self.main_window.raider_tab.load_request(request_data)
+        self.main_window.tab_widget.setCurrentWidget(self.main_window.raider_tab)
     
     def clear_request(self):
         """Clear all request fields"""

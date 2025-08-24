@@ -112,12 +112,15 @@ class ProxyTab(QWidget):
         menu = QMenu()
         send_to_repeater_action = QAction("Send to Repeater", self)
         send_to_scanner_action = QAction("Send to Active Scanner", self)
+        send_to_raider_action = QAction("Send to Raider", self)
 
         send_to_repeater_action.triggered.connect(self.send_to_repeater)
         send_to_scanner_action.triggered.connect(self.send_to_scanner)
+        send_to_raider_action.triggered.connect(self.send_to_raider)
 
         menu.addAction(send_to_repeater_action)
         menu.addAction(send_to_scanner_action)
+        menu.addAction(send_to_raider_action)
 
         menu.exec(self.history_table.mapToGlobal(position))
 
@@ -152,6 +155,13 @@ class ProxyTab(QWidget):
             self.main_window.scanner_tab.load_request(request_data)
             self.main_window.tab_widget.setCurrentWidget(self.main_window.scanner_tab)
             self.log_message(f"Sent {request_data['url']} to Active Scanner.")
+
+    def send_to_raider(self):
+        request_data = self.get_selected_flow_as_request_data()
+        if request_data:
+            self.main_window.raider_tab.load_request(request_data)
+            self.main_window.tab_widget.setCurrentWidget(self.main_window.raider_tab)
+            self.log_message(f"Sent {request_data['url']} to Raider.")
 
     @pyqtSlot()
     def start_proxy(self):

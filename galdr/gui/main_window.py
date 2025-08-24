@@ -21,6 +21,7 @@ from gui.cve_monitor_tab import CVEMonitorTab
 from gui.ai_copilot_tab import AICoPilotTab
 from gui.scanner_tab import ScannerTab
 from gui.proxy_tab import ProxyTab
+from gui.raider_tab import RaiderTab
 from core.project_manager import ScanSettings, UserPreferences
 
 class MainWindow(QMainWindow):
@@ -205,7 +206,7 @@ class MainWindow(QMainWindow):
         self.tab_widget.addTab(self.project_profiles_tab, "📁 Projects")
         
         # Repeater tab
-        self.repeater_tab = RepeaterTab()
+        self.repeater_tab = RepeaterTab(self)
         self.repeater_tab.request_sent.connect(self.log_repeater_request)
         self.tab_widget.addTab(self.repeater_tab, "🔄 Repeater")
 
@@ -216,6 +217,10 @@ class MainWindow(QMainWindow):
         # Proxy Tab
         self.proxy_tab = ProxyTab(self)
         self.tab_widget.addTab(self.proxy_tab, "📡 Proxy")
+
+        # Raider (Fuzzer) Tab
+        self.raider_tab = RaiderTab(self)
+        self.tab_widget.addTab(self.raider_tab, "💥 Raider")
 
         # AI Settings tab
         self.ai_settings_panel = AISettingsPanel()
