@@ -21,7 +21,9 @@ from gui.cve_monitor_tab import CVEMonitorTab
 from gui.ai_copilot_tab import AICoPilotTab
 from gui.cryptographer_tab import CryptographerTab
 from gui.proxy_tab import ProxyTab
+from gui.raider_tab import RaiderTab
 from core.proxy_engine import ProxyEngine
+from core.raider_engine import RaiderEngine
 from core.project_manager import ScanSettings, UserPreferences
 
 class MainWindow(QMainWindow):
@@ -58,6 +60,7 @@ class MainWindow(QMainWindow):
         self.ai_analyzer.initialize()
         
         self.proxy_engine = ProxyEngine()
+        self.raider_engine = None
 
         self.init_user_database()
         self.init_ui()
@@ -165,7 +168,8 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.tab_widget)
 
         self.init_crawler_tab()
-        self.init_proxy_tab() # Add this
+        self.init_proxy_tab()
+        self.init_raider_tab()
         self.init_results_tab()
         self.init_tech_tab()
         self.init_security_tab()
@@ -196,14 +200,12 @@ class MainWindow(QMainWindow):
 
     def init_proxy_tab(self):
         self.proxy_tab = ProxyTab()
-        # Connect proxy controls
         self.proxy_tab.start_proxy_btn.clicked.connect(self.start_proxy)
         self.proxy_tab.stop_proxy_btn.clicked.connect(self.stop_proxy)
         self.proxy_tab.toggle_intercept_signal.connect(self.proxy_engine.toggle_intercept)
         self.proxy_tab.forward_request_signal.connect(self.proxy_engine.resume_flow)
         self.proxy_tab.drop_request_signal.connect(self.proxy_engine.drop_flow)
 
-        # Connect engine signals to UI slots
         self.proxy_engine.signals.new_flow.connect(self.proxy_tab.add_flow_to_history)
         self.proxy_engine.signals.request_intercepted.connect(self.proxy_tab.handle_intercepted_request)
 
@@ -220,6 +222,40 @@ class MainWindow(QMainWindow):
         self.proxy_tab.start_proxy_btn.setEnabled(True)
         self.proxy_tab.stop_proxy_btn.setEnabled(False)
         self.append_log("📡 Proxy stopped.")
+
+    def init_raider_tab(self):
+        self.raider_tab = RaiderTab()
+        self.raider_tab.start_attack_btn.clicked.connect(self.start_raider_attack)
+        self.raider_tab.stop_attack_btn.clicked.connect(self.stop_raider_attack)
+        self.tab_widget.addTab(self.raider_tab, "⚔️ Raider")
+
+    def start_raider_attack(self):
+        raw_request = self.raider_tab.request_editor.toPlainText()
+        payloads = self.raider_tab.payloads_editor.toPlainText().splitlines()
+
+        if not raw_request or not payloads:
+            QMessageBox.warning(self, "Input Error", "Request and Payloads cannot be empty.")
+            return
+
+        self.raider_tab.start_attack_btn.setEnabled(False)
+        self.raider_tab.stop_attack_btn.setEnabled(True)
+        self.append_log(f"⚔️ Raider attack started with {len(payloads)} payloads.")
+
+        self.raider_engine = RaiderEngine(raw_request, payloads)
+        self.raider_engine.result_ready.connect(self.raider_tab.add_result_to_table)
+        self.raider_engine.attack_finished.connect(self.raider_attack_finished)
+        self.raider_engine.start()
+
+    def stop_raider_attack(self):
+        if self.raider_engine and self.raider_engine.isRunning():
+            self.raider_engine.stop()
+            self.append_log("⚔️ Raider attack stopping...")
+
+    def raider_attack_finished(self):
+        self.raider_tab.start_attack_btn.setEnabled(True)
+        self.raider_tab.stop_attack_btn.setEnabled(False)
+        self.append_log("⚔️ Raider attack finished.")
+        self.raider_engine = None
 
     def init_crawler_tab(self):
         crawler_widget = QWidget()
@@ -1384,6 +1420,14 @@ class MainWindow(QMainWindow):
             self.crawler.stop()
             self.crawler.wait(5000)
         
+        if hasattr(self, 'proxy_engine') and self.proxy_engine.isRunning():
+            self.proxy_engine.shutdown()
+            self.proxy_engine.wait(5000)
+
+        if hasattr(self, 'raider_engine') and self.raider_engine and self.raider_engine.isRunning():
+            self.raider_engine.stop()
+            self.raider_engine.wait(5000)
+
         self.save_user_settings()
         self.append_log(f"👋 Goodbye, {self.current_user}!")
         event.accept()
