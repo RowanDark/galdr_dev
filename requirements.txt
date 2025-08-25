@@ -9,3 +9,4 @@ base45
 base58
 bcrypt
 keyring
+mitmproxy
