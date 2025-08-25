@@ -19,6 +19,7 @@ from gui.theme_manager import ThemeManager
 from gui.project_profiles_tab import ProjectProfilesTab
 from gui.cve_monitor_tab import CVEMonitorTab
 from gui.ai_copilot_tab import AICoPilotTab
+from gui.cryptographer_tab import CryptographerTab
 from core.project_manager import ScanSettings, UserPreferences
 
 class MainWindow(QMainWindow):
@@ -207,6 +208,10 @@ class MainWindow(QMainWindow):
         self.repeater_tab.request_sent.connect(self.log_repeater_request)
         self.tab_widget.addTab(self.repeater_tab, "🔄 Repeater")
         
+        # Cryptographer tab
+        self.cryptographer_tab = CryptographerTab()
+        self.tab_widget.addTab(self.cryptographer_tab, "🔑 Cryptographer")
+
         # AI Settings tab
         self.ai_settings_panel = AISettingsPanel()
         self.ai_settings_panel.ai_settings_changed.connect(self.update_ai_settings)
