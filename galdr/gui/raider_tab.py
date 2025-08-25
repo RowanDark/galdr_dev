@@ -1,4 +1,5 @@
 import asyncio
+import re
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget, QTableWidgetItem,
     QSplitter, QTabWidget, QTextEdit, QGroupBox, QLabel, QHeaderView, QListWidget,
@@ -33,6 +34,7 @@ class RaiderTab(QWidget):
         self.raider_manager = None
         self.payload_manager = PayloadManager()
         self.ai_payload_thread = None
+        self.marker_positions = 0
         self.init_ui()
         self.connect_signals()
 
@@ -53,8 +55,10 @@ class RaiderTab(QWidget):
 
         # Injection Point Controls
         ip_layout = QHBoxLayout()
-        self.add_marker_btn = QPushButton("Add § Injection Marker")
+        self.add_marker_btn = QPushButton("Add § Marker")
+        self.clear_markers_btn = QPushButton("Clear Markers")
         ip_layout.addWidget(self.add_marker_btn)
+        ip_layout.addWidget(self.clear_markers_btn)
         ip_layout.addStretch()
         request_layout.addLayout(ip_layout)
         config_layout.addWidget(request_group)
@@ -112,6 +116,12 @@ class RaiderTab(QWidget):
         # Attack Controls
         attack_controls_group = QGroupBox("Attack Controls")
         attack_controls_layout = QHBoxLayout(attack_controls_group)
+
+        attack_controls_layout.addWidget(QLabel("Attack Type:"))
+        self.attack_type_combo = QComboBox()
+        self.attack_type_combo.addItems(["Sniper", "Battering Ram", "Pitchfork", "Cluster Bomb"])
+        attack_controls_layout.addWidget(self.attack_type_combo)
+
         self.start_btn = QPushButton("Start Attack")
         self.stop_btn = QPushButton("Stop Attack")
         self.stop_btn.setEnabled(False)
@@ -131,6 +141,7 @@ class RaiderTab(QWidget):
 
     def connect_signals(self):
         self.add_marker_btn.clicked.connect(self.add_injection_marker)
+        self.clear_markers_btn.clicked.connect(self.clear_markers)
         self.start_btn.clicked.connect(self.start_attack)
         self.stop_btn.clicked.connect(self.stop_attack)
         self.ai_generate_btn.clicked.connect(self.generate_ai_payloads)
@@ -159,15 +170,23 @@ class RaiderTab(QWidget):
         self.ai_generate_btn.setEnabled(True)
 
     def add_injection_marker(self):
+        self.marker_positions += 1
         cursor = self.request_editor.textCursor()
         if cursor.hasSelection():
-            # A more robust implementation would use a single, unique marker
-            # and store the start/end positions. For now, this is simpler.
             selection = cursor.selectedText()
-            cursor.insertText(f"§{selection}§")
+            cursor.insertText(f"§{self.marker_positions}§{selection}§{self.marker_positions}§")
+        else:
+            cursor.insertText(f"§{self.marker_positions}§")
 
-    def start_attack(self):
-        template = self.request_editor.toPlainText()
+    def clear_markers(self):
+        text = self.request_editor.toPlainText()
+        # This regex removes the §...§ markers but keeps the content between them.
+        cleared_text = re.sub(r"§\d+§(.*?)§\d+§", r"\1", text)
+        # This regex removes empty markers like §1§
+        cleared_text = re.sub(r"§\d+§", "", cleared_text)
+        self.request_editor.setPlainText(cleared_text)
+        self.marker_positions = 0
+
     def load_builtin_payload_lists(self):
         """Loads the list of available payload files into the UI."""
         self.builtin_payloads_list.clear()
@@ -176,16 +195,12 @@ class RaiderTab(QWidget):
 
     def start_attack(self):
         template = self.request_editor.toPlainText()
-        if "§" not in template:
+        if not re.search(r"§\d+§", template):
+            # No numbered markers found, do nothing.
             return
 
-        import re
-        match = re.search(r"§(.*?)§", template)
-        if not match:
-            return
-        injection_point = match.group(0)
-
-        # Determine payload source
+        # For now, we only support a single payload list, which will be used
+        # for all injection point sets (e.g., for Sniper and Battering Ram).
         payloads = []
         current_tab_index = self.payload_tabs.currentIndex()
         if self.payload_tabs.tabText(current_tab_index) == "Simple List":
@@ -201,17 +216,21 @@ class RaiderTab(QWidget):
         if not payloads:
             return
 
+        # The payload dictionary maps position number to payload list.
+        # For now, we assign the single list to key "1" for Sniper/Battering Ram.
+        # A full UI would manage multiple lists for Pitchfork/Cluster Bomb.
+        payload_dict = {"1": payloads}
+        attack_type = self.attack_type_combo.currentText()
+
         self.results_table.setRowCount(0)
+        self.marker_positions = 0 # Reset for the next time
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
 
-        # The core logic assumes the template *is* the URL for now.
-        # This is a major simplification for the UI design phase.
-        simplified_template = template.replace(injection_point, injection_point)
-
-        self.raider_manager = RaiderManager(simplified_template, [injection_point], payloads)
+        self.raider_manager = RaiderManager(template, payload_dict, attack_type)
         self.raider_manager.request_completed.connect(self.add_result_to_table)
         self.raider_manager.fuzzing_finished.connect(self.fuzzing_finished)
+        self.raider_manager.log_message.connect(self.log_message) # Connect log
         self.raider_manager.start()
 
     def stop_attack(self):
