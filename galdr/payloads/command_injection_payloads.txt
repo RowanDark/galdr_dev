@@ -1,0 +1,13 @@
+; id
+| id
+&& id
+|| id
+`id`
+$(id)
+; sleep 10
+| sleep 10
+& sleep 10
+&& sleep 10
+; ping -c 10 127.0.0.1
+& timeout /t 10 /nobreak
+| timeout /t 10 /nobreak

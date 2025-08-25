@@ -206,6 +206,36 @@ class CloudAPIIntegration:
         
         return results
     
+    async def generate_payloads_with_cloud_ai(self, context: str, vulnerability_type: str, count: int, provider: str, model: str) -> List[str]:
+        """Generate payloads using cloud AI APIs."""
+        if provider not in self.supported_providers:
+            raise ValueError(f"Unsupported provider: {provider}")
+
+        if provider != 'ollama' and provider not in self.api_keys:
+            raise ValueError(f"API key not set for provider: {provider}")
+
+        try:
+            prompt = self._create_payload_generation_prompt(context, vulnerability_type, count)
+            # For simplicity, we'll just use the OpenAI call structure as a template
+            response_text = await self._call_openai_for_text(prompt, model)
+            # A real implementation would need more robust parsing
+            payloads = [line.strip() for line in response_text.split('\n') if line.strip()]
+            return payloads
+        except Exception as e:
+            self.logger.error(f"Payload generation API call failed for {provider}: {e}")
+            return []
+
+    def _create_payload_generation_prompt(self, context: str, vulnerability_type: str, count: int) -> str:
+        """Create a prompt for AI payload generation."""
+        return f"""
+        As a cybersecurity expert, generate a list of {count} creative, context-aware payloads for a '{vulnerability_type}' vulnerability.
+        The target context is the following HTTP request:
+        ---
+        {context}
+        ---
+        Return ONLY the payloads, each on a new line. Do not include explanations, numbers, or bullet points.
+        """
+
     async def _call_api(self, finding: Dict, provider: str, model: str) -> Dict:
         """Make API call to cloud provider"""
         prompt = self._create_security_analysis_prompt(finding)
@@ -265,6 +295,16 @@ class CloudAPIIntegration:
             'analysis': 'AI analysis would be here',
             'confidence': 0.9
         }
+
+    async def _call_openai_for_text(self, prompt: str, model: str) -> str:
+        """Calls the OpenAI API and returns the raw text response."""
+        # This is a simulation. A real implementation would make an HTTP request
+        # and parse the JSON to extract the 'content' of the message.
+        self.logger.info(f"Simulating OpenAI call for payload generation with model {model}.")
+        # Simulate a list of payloads as a newline-separated string
+        return "\n".join([
+            f"ai-payload-{i}" for i in range(10)
+        ])
     
     async def _call_anthropic(self, prompt: str, model: str) -> Dict:
         """Call Anthropic Claude API"""
@@ -358,3 +398,19 @@ class AISecurityAnalyzer(QObject):
             providers[provider] = config['models']
         
         return providers
+
+    async def generate_smart_payloads(self, context: str, vulnerability_type: str, count: int = 10) -> List[str]:
+        """Generate smart payloads using the configured AI provider."""
+        try:
+            if self.current_provider == 'foundation-sec-8b':
+                # Foundation model might have a different, specialized method
+                # For now, we'll simulate it or fall back.
+                return [f"foundation-payload-for-{vulnerability_type}-{i}" for i in range(count)]
+            else:
+                # Use cloud API
+                return await self.cloud_ai.generate_payloads_with_cloud_ai(
+                    context, vulnerability_type, count, self.current_provider, self.current_model
+                )
+        except Exception as e:
+            self.logger.error(f"AI payload generation failed: {e}")
+            return []

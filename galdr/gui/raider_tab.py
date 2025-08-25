@@ -1,16 +1,38 @@
+import asyncio
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget, QTableWidgetItem,
-    QSplitter, QTabWidget, QTextEdit, QGroupBox, QLabel, QHeaderView
+    QSplitter, QTabWidget, QTextEdit, QGroupBox, QLabel, QHeaderView, QListWidget,
+    QComboBox, QSpinBox
 )
-from PyQt6.QtCore import Qt, pyqtSlot
+from PyQt6.QtCore import Qt, pyqtSlot, QThread, pyqtSignal
 from PyQt6.QtGui import QFont
 
 from galdr.raider.raider_core import RaiderManager
+from galdr.payloads.manager import PayloadManager
+
+class AIPayloadGeneratorThread(QThread):
+    payloads_ready = pyqtSignal(list)
+
+    def __init__(self, ai_analyzer, context, vuln_type, count):
+        super().__init__()
+        self.ai_analyzer = ai_analyzer
+        self.context = context
+        self.vuln_type = vuln_type
+        self.count = count
+
+    def run(self):
+        payloads = asyncio.run(
+            self.ai_analyzer.generate_smart_payloads(self.context, self.vuln_type, self.count)
+        )
+        self.payloads_ready.emit(payloads)
 
 class RaiderTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.main_window = parent
         self.raider_manager = None
+        self.payload_manager = PayloadManager()
+        self.ai_payload_thread = None
         self.init_ui()
         self.connect_signals()
 
@@ -50,8 +72,38 @@ class RaiderTab(QWidget):
         simple_list_layout.addWidget(self.payload_list_editor)
         self.payload_tabs.addTab(simple_list_widget, "Simple List")
 
+        # Built-in Lists Tab
+        builtin_list_widget = QWidget()
+        builtin_list_layout = QVBoxLayout(builtin_list_widget)
+        self.builtin_payloads_list = QListWidget()
+        builtin_list_layout.addWidget(self.builtin_payloads_list)
+        self.payload_tabs.addTab(builtin_list_widget, "Built-in Lists")
+
+        # AI Generated Tab
+        ai_widget = QWidget()
+        ai_layout = QVBoxLayout(ai_widget)
+        ai_controls_layout = QHBoxLayout()
+        ai_controls_layout.addWidget(QLabel("Vuln Type:"))
+        self.ai_vuln_type_combo = QComboBox()
+        self.ai_vuln_type_combo.addItems(["SQL Injection", "XSS", "Command Injection"])
+        ai_controls_layout.addWidget(self.ai_vuln_type_combo)
+        ai_controls_layout.addWidget(QLabel("Count:"))
+        self.ai_payload_count_spin = QSpinBox()
+        self.ai_payload_count_spin.setRange(5, 50)
+        self.ai_payload_count_spin.setValue(10)
+        ai_controls_layout.addWidget(self.ai_payload_count_spin)
+        self.ai_generate_btn = QPushButton("Generate")
+        ai_controls_layout.addWidget(self.ai_generate_btn)
+        ai_layout.addLayout(ai_controls_layout)
+        self.ai_payloads_editor = QTextEdit()
+        self.ai_payloads_editor.setReadOnly(True)
+        ai_layout.addWidget(self.ai_payloads_editor)
+        self.payload_tabs.addTab(ai_widget, "AI Generated")
+
         payloads_layout.addWidget(self.payload_tabs)
         config_layout.addWidget(payloads_group)
+
+        self.load_builtin_payload_lists()
 
         # --- Right side: Attack Control and Results ---
         results_widget = QWidget()
@@ -81,6 +133,30 @@ class RaiderTab(QWidget):
         self.add_marker_btn.clicked.connect(self.add_injection_marker)
         self.start_btn.clicked.connect(self.start_attack)
         self.stop_btn.clicked.connect(self.stop_attack)
+        self.ai_generate_btn.clicked.connect(self.generate_ai_payloads)
+
+    def generate_ai_payloads(self):
+        if not self.main_window or not self.main_window.ai_analyzer:
+            return
+
+        context = self.request_editor.toPlainText()
+        vuln_type = self.ai_vuln_type_combo.currentText()
+        count = self.ai_payload_count_spin.value()
+
+        self.ai_generate_btn.setText("Generating...")
+        self.ai_generate_btn.setEnabled(False)
+
+        self.ai_payload_thread = AIPayloadGeneratorThread(
+            self.main_window.ai_analyzer, context, vuln_type, count
+        )
+        self.ai_payload_thread.payloads_ready.connect(self.on_ai_payloads_ready)
+        self.ai_payload_thread.start()
+
+    @pyqtSlot(list)
+    def on_ai_payloads_ready(self, payloads):
+        self.ai_payloads_editor.setPlainText("\n".join(payloads))
+        self.ai_generate_btn.setText("Generate")
+        self.ai_generate_btn.setEnabled(True)
 
     def add_injection_marker(self):
         cursor = self.request_editor.textCursor()
@@ -92,20 +168,36 @@ class RaiderTab(QWidget):
 
     def start_attack(self):
         template = self.request_editor.toPlainText()
+    def load_builtin_payload_lists(self):
+        """Loads the list of available payload files into the UI."""
+        self.builtin_payloads_list.clear()
+        available_lists = self.payload_manager.get_available_lists()
+        self.builtin_payloads_list.addItems(available_lists)
+
+    def start_attack(self):
+        template = self.request_editor.toPlainText()
         if "§" not in template:
-            # Simple validation
             return
 
-        # A more robust implementation would parse all injection points.
-        # We'll find the first one for this example.
         import re
         match = re.search(r"§(.*?)§", template)
         if not match:
             return
-
         injection_point = match.group(0)
 
-        payloads = self.payload_list_editor.toPlainText().splitlines()
+        # Determine payload source
+        payloads = []
+        current_tab_index = self.payload_tabs.currentIndex()
+        if self.payload_tabs.tabText(current_tab_index) == "Simple List":
+            payloads = self.payload_list_editor.toPlainText().splitlines()
+        elif self.payload_tabs.tabText(current_tab_index) == "Built-in Lists":
+            selected_item = self.builtin_payloads_list.currentItem()
+            if selected_item:
+                list_name = selected_item.text()
+                payloads = self.payload_manager.load_payload_list(list_name)
+        elif self.payload_tabs.tabText(current_tab_index) == "AI Generated":
+            payloads = self.ai_payloads_editor.toPlainText().splitlines()
+
         if not payloads:
             return
 

