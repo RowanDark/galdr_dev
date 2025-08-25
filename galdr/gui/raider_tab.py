@@ -40,7 +40,7 @@ class RaiderTab(QWidget):
         request_group = QGroupBox("Request")
         request_layout = QVBoxLayout(request_group)
         self.request_editor = QTextEdit()
-        self.request_editor.setPlaceholderText("Paste raw HTTP request here. Mark injection points with §...§")
+        self.request_editor.setPlaceholderText("Paste raw HTTP request here. Mark injection points with $$")
         request_layout.addWidget(self.request_editor)
         h_splitter.addWidget(request_group)
 

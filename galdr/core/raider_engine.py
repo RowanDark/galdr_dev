@@ -16,7 +16,7 @@ class RaiderEngine(QThread):
         self.raw_request = raw_request
         self.payloads = payloads
         self.is_running = True
-        self.injection_marker = "§"
+        self.injection_marker = "$$"
 
     def run(self):
         """

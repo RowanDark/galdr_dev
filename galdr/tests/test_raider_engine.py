@@ -51,13 +51,12 @@ class TestRaiderEngine(unittest.TestCase):
         raw_request = (
             "POST /search HTTP/1.1\n"
             "Host: example.com\n\n"
-            "query=§"
+            "query=$$"
         )
         payloads = ["payload1", "payload2"]
 
         with patch('PyQt6.QtCore.QThread.start'):
             engine = RaiderEngine(raw_request, payloads)
-            # Mock the signals to prevent Qt errors
             engine.result_ready = MagicMock()
             engine.attack_finished = MagicMock()
             engine.run()
@@ -76,7 +75,7 @@ class TestRaiderEngine(unittest.TestCase):
         raw_request = (
             "GET / HTTP/1.1\n"
             "Host: example.com\n"
-            "User-Agent: Galdr-§"
+            "User-Agent: Galdr-$$"
         )
         payloads = ["1.0", "2.0"]
 
