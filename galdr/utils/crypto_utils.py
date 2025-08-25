@@ -129,3 +129,84 @@ def xor_decipher(encoded_text: str, key: str) -> str:
     """Deciphers a repeating-key XOR cipher."""
     # XOR is symmetric, so encryption and decryption are the same.
     return xor_cipher(encoded_text, key)
+
+# ##################################################################################
+#  Symmetric Ciphers
+# ##################################################################################
+
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.decrepit.ciphers import algorithms as decrepit_algorithms
+from cryptography.hazmat.primitives import padding
+from cryptography.hazmat.backends import default_backend
+
+def _get_cipher_algorithm(cipher_name, key):
+    """Returns a cipher algorithm instance."""
+    if cipher_name == 'AES':
+        return algorithms.AES(key)
+    elif cipher_name == 'TripleDES':
+        return decrepit_algorithms.TripleDES(key)
+    elif cipher_name == 'Blowfish':
+        return decrepit_algorithms.Blowfish(key)
+    elif cipher_name == 'RC4':
+        return decrepit_algorithms.ARC4(key)
+    else:
+        raise ValueError(f"Unsupported cipher: {cipher_name}")
+
+def _get_cipher_mode(mode_name, iv):
+    """Returns a cipher mode instance."""
+    if mode_name == 'CBC':
+        return modes.CBC(iv)
+    elif mode_name == 'ECB':
+        return modes.ECB()
+    elif mode_name == 'CFB':
+        return modes.CFB(iv)
+    elif mode_name == 'OFB':
+        return modes.OFB(iv)
+    else:
+        raise ValueError(f"Unsupported mode: {mode_name}")
+
+def symmetric_encrypt(cipher_name, mode_name, key_hex, iv_hex, plaintext):
+    """Encrypts plaintext using a symmetric cipher."""
+    key = bytes.fromhex(key_hex)
+    iv = bytes.fromhex(iv_hex) if iv_hex else None
+
+    algorithm = _get_cipher_algorithm(cipher_name, key)
+
+    # RC4 is a stream cipher and doesn't use modes or padding
+    if isinstance(algorithm, decrepit_algorithms.ARC4):
+        cipher = Cipher(algorithm, mode=None, backend=default_backend())
+        encryptor = cipher.encryptor()
+        return encryptor.update(plaintext.encode('utf-8')) + encryptor.finalize()
+
+    mode = _get_cipher_mode(mode_name, iv)
+    cipher = Cipher(algorithm, mode, backend=default_backend())
+    encryptor = cipher.encryptor()
+
+    padder = padding.PKCS7(algorithm.block_size).padder()
+    padded_data = padder.update(plaintext.encode('utf-8')) + padder.finalize()
+
+    return encryptor.update(padded_data) + encryptor.finalize()
+
+def symmetric_decrypt(cipher_name, mode_name, key_hex, iv_hex, ciphertext):
+    """Decrypts ciphertext using a symmetric cipher."""
+    key = bytes.fromhex(key_hex)
+    iv = bytes.fromhex(iv_hex) if iv_hex else None
+
+    algorithm = _get_cipher_algorithm(cipher_name, key)
+
+    # RC4 handling
+    if isinstance(algorithm, decrepit_algorithms.ARC4):
+        cipher = Cipher(algorithm, mode=None, backend=default_backend())
+        decryptor = cipher.decryptor()
+        return decryptor.update(ciphertext) + decryptor.finalize()
+
+    mode = _get_cipher_mode(mode_name, iv)
+    cipher = Cipher(algorithm, mode, backend=default_backend())
+    decryptor = cipher.decryptor()
+
+    decrypted_padded_data = decryptor.update(ciphertext) + decryptor.finalize()
+
+    unpadder = padding.PKCS7(algorithm.block_size).unpadder()
+    unpadded_data = unpadder.update(decrypted_padded_data) + unpadder.finalize()
+
+    return unpadded_data.decode('utf-8')

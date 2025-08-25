@@ -9,7 +9,8 @@ from galdr.utils.crypto_utils import (
     text_to_binary, binary_to_text,
     text_to_octal, octal_to_text,
     rot13_cipher,
-    xor_cipher, xor_decipher
+    xor_cipher, xor_decipher,
+    symmetric_encrypt, symmetric_decrypt
 )
 
 class TestCryptoUtils(unittest.TestCase):
@@ -89,6 +90,38 @@ class TestCryptoUtils(unittest.TestCase):
         self.assertNotEqual(encoded, original)
         decoded = xor_decipher(encoded, key)
         self.assertEqual(decoded, original)
+
+class TestSymmetricCiphers(unittest.TestCase):
+    def test_aes_cbc(self):
+        key = "000102030405060708090a0b0c0d0e0f"
+        iv = "000102030405060708090a0b0c0d0e0f"
+        plaintext = "This is a test for AES CBC."
+        ciphertext = symmetric_encrypt("AES", "CBC", key, iv, plaintext)
+        decrypted = symmetric_decrypt("AES", "CBC", key, iv, ciphertext)
+        self.assertEqual(decrypted, plaintext)
+
+    def test_tripledes_cbc(self):
+        key = "000102030405060708090a0b0c0d0e0f"
+        iv = "0001020304050607"
+        plaintext = "This is a test for 3DES CBC."
+        ciphertext = symmetric_encrypt("TripleDES", "CBC", key, iv, plaintext)
+        decrypted = symmetric_decrypt("TripleDES", "CBC", key, iv, ciphertext)
+        self.assertEqual(decrypted, plaintext)
+
+    def test_blowfish_cbc(self):
+        key = "000102030405060708090a0b0c0d0e0f"
+        iv = "0001020304050607"
+        plaintext = "This is a test for Blowfish."
+        ciphertext = symmetric_encrypt("Blowfish", "CBC", key, iv, plaintext)
+        decrypted = symmetric_decrypt("Blowfish", "CBC", key, iv, ciphertext)
+        self.assertEqual(decrypted, plaintext)
+
+    def test_rc4(self):
+        key = "000102030405060708090a0b0c0d0e0f"
+        plaintext = "This is a test for RC4."
+        ciphertext = symmetric_encrypt("RC4", None, key, None, plaintext)
+        decrypted_bytes = symmetric_decrypt("RC4", None, key, None, ciphertext)
+        self.assertEqual(decrypted_bytes.decode('utf-8'), plaintext)
 
 if __name__ == '__main__':
     unittest.main()
