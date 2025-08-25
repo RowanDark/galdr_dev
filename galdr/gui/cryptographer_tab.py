@@ -183,12 +183,51 @@ class CryptographerTab(QWidget):
         top_widget = QWidget()
         top_widget.setLayout(main_layout)
 
+        # --- Symmetric Cipher Section ---
+        sym_cipher_group = QGroupBox("Symmetric Ciphers")
+        sym_cipher_layout = QVBoxLayout(sym_cipher_group)
+
+        # Config Row
+        config_layout = QHBoxLayout()
+        config_layout.addWidget(QLabel("Cipher:"))
+        self.cipher_combo = QComboBox()
+        config_layout.addWidget(self.cipher_combo)
+
+        config_layout.addWidget(QLabel("Mode:"))
+        self.mode_combo = QComboBox()
+        config_layout.addWidget(self.mode_combo)
+
+        sym_cipher_layout.addLayout(config_layout)
+
+        # Key/IV Row
+        key_iv_layout = QHBoxLayout()
+        key_iv_layout.addWidget(QLabel("Key (hex):"))
+        self.key_input = QLineEdit()
+        key_iv_layout.addWidget(self.key_input)
+
+        key_iv_layout.addWidget(QLabel("IV (hex):"))
+        self.iv_input = QLineEdit()
+        key_iv_layout.addWidget(self.iv_input)
+
+        sym_cipher_layout.addLayout(key_iv_layout)
+
+        # Button Row
+        button_layout = QHBoxLayout()
+        self.encrypt_btn = QPushButton("Encrypt")
+        self.decrypt_btn = QPushButton("Decrypt")
+        button_layout.addStretch()
+        button_layout.addWidget(self.encrypt_btn)
+        button_layout.addWidget(self.decrypt_btn)
+        sym_cipher_layout.addLayout(button_layout)
+
         # Main vertical layout
         v_layout = QVBoxLayout(self)
         v_layout.addWidget(top_widget)
         v_layout.addWidget(jwt_group)
+        v_layout.addWidget(sym_cipher_group)
 
         self.connect_signals()
+        self.populate_cipher_combos()
 
     def connect_signals(self):
         self.url_encode_btn.clicked.connect(lambda: self.transform_text(CryptoUtils.url_encode))
@@ -225,6 +264,10 @@ class CryptographerTab(QWidget):
         # JWT signals
         self.jwt_input_editor.textChanged.connect(self.on_jwt_input_changed)
         self.jwt_verify_btn.clicked.connect(self.on_verify_button_clicked)
+
+        # Symmetric Cipher signals
+        self.encrypt_btn.clicked.connect(lambda: self.run_symmetric_cipher(decrypt=False))
+        self.decrypt_btn.clicked.connect(lambda: self.run_symmetric_cipher(decrypt=True))
 
     def on_jwt_input_changed(self):
         token = self.jwt_input_editor.toPlainText().strip()
@@ -289,6 +332,50 @@ class CryptographerTab(QWidget):
         # For simplicity, we'll assume the input is always plain text for now.
         output_text = CryptoUtils.xor(input_text, key)
         self.output_editor.setPlainText(output_text)
+
+    def populate_cipher_combos(self):
+        self.cipher_combo.addItems(CryptoUtils.CIPHER_MODES.keys())
+        self.cipher_combo.addItems(CryptoUtils.STREAM_CIPHERS)
+        self.cipher_combo.currentIndexChanged.connect(self.on_cipher_changed)
+        self.on_cipher_changed() # Populate modes for default selection
+
+    def on_cipher_changed(self):
+        self.mode_combo.clear()
+        cipher_name = self.cipher_combo.currentText()
+        if cipher_name in CryptoUtils.CIPHER_MODES:
+            # Map mode constants to human-readable names
+            mode_map = {1: "ECB", 2: "CBC", 3: "CFB", 5: "OFB"}
+            modes = [mode_map.get(m, f"Mode {m}") for m in CryptoUtils.CIPHER_MODES[cipher_name]["modes"]]
+            self.mode_combo.addItems(modes)
+            self.mode_combo.setEnabled(True)
+            self.iv_input.setEnabled(True)
+        else: # Stream cipher
+            self.mode_combo.addItem("N/A")
+            self.mode_combo.setEnabled(False)
+            self.iv_input.setEnabled(False)
+
+    def run_symmetric_cipher(self, decrypt=False):
+        try:
+            cipher_name = self.cipher_combo.currentText()
+
+            mode_str = self.mode_combo.currentText()
+            mode_map_inv = {"ECB": 1, "CBC": 2, "CFB": 3, "OFB": 5}
+            mode = mode_map_inv.get(mode_str, 1) # Default to ECB
+
+            key = bytes.fromhex(self.key_input.text())
+            iv = bytes.fromhex(self.iv_input.text()) if self.iv_input.isEnabled() else b''
+
+            if decrypt:
+                data = bytes.fromhex(self.output_editor.toPlainText())
+                result = CryptoUtils.symmetric_decrypt(cipher_name, mode, data, key, iv)
+                self.input_editor.setPlainText(result)
+            else: # Encrypt
+                data = self.input_editor.toPlainText().encode('utf-8')
+                result = CryptoUtils.symmetric_encrypt(cipher_name, mode, data, key, iv)
+                self.output_editor.setPlainText(result)
+
+        except Exception as e:
+            self.output_editor.setPlainText(f"Error: {e}")
 
     def transform_text(self, func, reverse=False):
         if not reverse:

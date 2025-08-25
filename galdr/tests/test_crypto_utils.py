@@ -3,6 +3,7 @@ import time
 import jwt
 
 from galdr.utils.crypto_utils import CryptoUtils
+from Crypto.Cipher import AES
 
 class TestCryptoUtils(unittest.TestCase):
 
@@ -109,6 +110,27 @@ class TestCryptoUtils(unittest.TestCase):
     def test_jwt_verify_expired(self):
         result = CryptoUtils.verify_jwt_signature(self.expired_token, self.secret_key)
         self.assertIn("Signature has expired", result)
+
+    # --- Symmetric Cipher Tests ---
+    def test_symmetric_aes_cbc(self):
+        key = b'Sixteen byte key' # 16 bytes -> AES-128
+        iv = b'This is an IV456'  # 16 bytes
+        plain_text = b'This is the data to be encrypted.'
+
+        encrypted_hex = CryptoUtils.symmetric_encrypt("AES", AES.MODE_CBC, plain_text, key, iv)
+        decrypted_text = CryptoUtils.symmetric_decrypt("AES", AES.MODE_CBC, bytes.fromhex(encrypted_hex), key, iv)
+
+        self.assertEqual(decrypted_text.encode('utf-8'), plain_text)
+
+    def test_symmetric_arc4(self):
+        key = b'somekey'
+        plain_text = b'This is a stream cipher test.'
+
+        encrypted_hex = CryptoUtils.symmetric_encrypt("ARC4", -1, plain_text, key, b'') # mode/iv not used
+        decrypted_text = CryptoUtils.symmetric_decrypt("ARC4", -1, bytes.fromhex(encrypted_hex), key, b'')
+
+        self.assertEqual(decrypted_text.encode('utf-8'), plain_text)
+
 
 if __name__ == '__main__':
     unittest.main()

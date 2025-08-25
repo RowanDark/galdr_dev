@@ -9,6 +9,9 @@ import base45
 import base58
 # import pybase62 as base62 # This package is causing issues
 
+from Crypto.Cipher import AES, DES, DES3, Blowfish, ARC2, ARC4
+from Crypto.Util.Padding import pad, unpad
+
 class CryptoUtils:
     """
     A utility class for various encoding, decoding, and crypto operations.
@@ -44,6 +47,52 @@ class CryptoUtils:
             return base64.b64decode(text.encode('utf-8')).decode('utf-8')
         except (binascii.Error, UnicodeDecodeError) as e:
             return f"Error: {e}"
+
+    # --- Symmetric Ciphers ---
+    CIPHER_MODES = {
+        "AES": {"modes": [AES.MODE_ECB, AES.MODE_CBC, AES.MODE_CFB, AES.MODE_OFB], "key_sizes": [16, 24, 32]},
+        "DES": {"modes": [DES.MODE_ECB, DES.MODE_CBC], "key_sizes": [8]},
+        "DES3": {"modes": [DES3.MODE_ECB, DES3.MODE_CBC], "key_sizes": [16, 24]},
+        "Blowfish": {"modes": [Blowfish.MODE_ECB, Blowfish.MODE_CBC], "key_sizes": list(range(4, 57))},
+        "ARC2": {"modes": [ARC2.MODE_ECB, ARC2.MODE_CBC], "key_sizes": list(range(5, 129))},
+    }
+    STREAM_CIPHERS = ["ARC4"]
+
+    @staticmethod
+    def _get_cipher_obj(cipher_name, key, iv, mode):
+        cipher_class = globals()[cipher_name]
+        if cipher_name in CryptoUtils.STREAM_CIPHERS:
+            return cipher_class.new(key)
+        else:
+            return cipher_class.new(key, mode, iv)
+
+    @staticmethod
+    def symmetric_encrypt(cipher_name: str, mode: int, data: bytes, key: bytes, iv: bytes) -> str:
+        try:
+            cipher = CryptoUtils._get_cipher_obj(cipher_name, key, iv, mode)
+            if cipher_name in CryptoUtils.STREAM_CIPHERS:
+                encrypted = cipher.encrypt(data)
+            else:
+                padded_data = pad(data, cipher.block_size)
+                encrypted = cipher.encrypt(padded_data)
+            return binascii.hexlify(encrypted).decode('utf-8')
+        except Exception as e:
+            return f"Encryption Error: {e}"
+
+    @staticmethod
+    def symmetric_decrypt(cipher_name: str, mode: int, data: bytes, key: bytes, iv: bytes) -> str:
+        try:
+            cipher = CryptoUtils._get_cipher_obj(cipher_name, key, iv, mode)
+            decrypted = cipher.decrypt(data)
+            if cipher_name in CryptoUtils.STREAM_CIPHERS:
+                return decrypted.decode('utf-8', errors='ignore')
+            else:
+                unpadded_data = unpad(decrypted, cipher.block_size)
+                return unpadded_data.decode('utf-8', errors='ignore')
+        except (ValueError, KeyError) as e:
+            return f"Decryption Error: {e}. Check key, IV, padding, and mode."
+        except Exception as e:
+            return f"Decryption Error: {e}"
 
     # --- Number Systems ---
     @staticmethod
