@@ -35,6 +35,7 @@ class RaiderTab(QWidget):
         self.payload_manager = PayloadManager()
         self.ai_payload_thread = None
         self.marker_positions = 0
+        self.payload_data = {}
         self.init_ui()
         self.connect_signals()
 
@@ -63,51 +64,16 @@ class RaiderTab(QWidget):
         request_layout.addLayout(ip_layout)
         config_layout.addWidget(request_group)
 
-        # Payloads
-        payloads_group = QGroupBox("Payloads")
+        # Payloads Configuration
+        payloads_group = QGroupBox("Payload Sets")
         payloads_layout = QVBoxLayout(payloads_group)
-        self.payload_tabs = QTabWidget()
-
-        # Simple List Tab
-        simple_list_widget = QWidget()
-        simple_list_layout = QVBoxLayout(simple_list_widget)
-        self.payload_list_editor = QTextEdit()
-        self.payload_list_editor.setPlaceholderText("Paste one payload per line...")
-        simple_list_layout.addWidget(self.payload_list_editor)
-        self.payload_tabs.addTab(simple_list_widget, "Simple List")
-
-        # Built-in Lists Tab
-        builtin_list_widget = QWidget()
-        builtin_list_layout = QVBoxLayout(builtin_list_widget)
-        self.builtin_payloads_list = QListWidget()
-        builtin_list_layout.addWidget(self.builtin_payloads_list)
-        self.payload_tabs.addTab(builtin_list_widget, "Built-in Lists")
-
-        # AI Generated Tab
-        ai_widget = QWidget()
-        ai_layout = QVBoxLayout(ai_widget)
-        ai_controls_layout = QHBoxLayout()
-        ai_controls_layout.addWidget(QLabel("Vuln Type:"))
-        self.ai_vuln_type_combo = QComboBox()
-        self.ai_vuln_type_combo.addItems(["SQL Injection", "XSS", "Command Injection"])
-        ai_controls_layout.addWidget(self.ai_vuln_type_combo)
-        ai_controls_layout.addWidget(QLabel("Count:"))
-        self.ai_payload_count_spin = QSpinBox()
-        self.ai_payload_count_spin.setRange(5, 50)
-        self.ai_payload_count_spin.setValue(10)
-        ai_controls_layout.addWidget(self.ai_payload_count_spin)
-        self.ai_generate_btn = QPushButton("Generate")
-        ai_controls_layout.addWidget(self.ai_generate_btn)
-        ai_layout.addLayout(ai_controls_layout)
-        self.ai_payloads_editor = QTextEdit()
-        self.ai_payloads_editor.setReadOnly(True)
-        ai_layout.addWidget(self.ai_payloads_editor)
-        self.payload_tabs.addTab(ai_widget, "AI Generated")
-
-        payloads_layout.addWidget(self.payload_tabs)
+        self.payload_sets_table = QTableWidget()
+        self.payload_sets_table.setColumnCount(4)
+        self.payload_sets_table.setHorizontalHeaderLabels(["Position", "Type", "Options", "Count"])
+        self.payload_sets_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.payload_sets_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.MinimumExpanding)
+        payloads_layout.addWidget(self.payload_sets_table)
         config_layout.addWidget(payloads_group)
-
-        self.load_builtin_payload_lists()
 
         # --- Right side: Attack Control and Results ---
         results_widget = QWidget()
@@ -170,22 +136,72 @@ class RaiderTab(QWidget):
         self.ai_generate_btn.setEnabled(True)
 
     def add_injection_marker(self):
+        # This simplified logic assumes markers are added in order.
+        # A full implementation would need to parse the text to find the next available number.
         self.marker_positions += 1
+        position = self.marker_positions
+
         cursor = self.request_editor.textCursor()
-        if cursor.hasSelection():
-            selection = cursor.selectedText()
-            cursor.insertText(f"§{self.marker_positions}§{selection}§{self.marker_positions}§")
-        else:
-            cursor.insertText(f"§{self.marker_positions}§")
+        # Use a non-enclosing marker for easier parsing
+        cursor.insertText(f"§{position}§")
+
+        self.add_payload_set_row(position)
 
     def clear_markers(self):
         text = self.request_editor.toPlainText()
-        # This regex removes the §...§ markers but keeps the content between them.
-        cleared_text = re.sub(r"§\d+§(.*?)§\d+§", r"\1", text)
-        # This regex removes empty markers like §1§
-        cleared_text = re.sub(r"§\d+§", "", cleared_text)
+        cleared_text = re.sub(r"§\d+§", "", text)
         self.request_editor.setPlainText(cleared_text)
         self.marker_positions = 0
+        self.payload_sets_table.setRowCount(0)
+        self.payload_data = {}
+
+    def add_payload_set_row(self, position):
+        row_position = self.payload_sets_table.rowCount()
+        self.payload_sets_table.insertRow(row_position)
+
+        # Position Number (static)
+        pos_item = QTableWidgetItem(str(position))
+        pos_item.setFlags(pos_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+        self.payload_sets_table.setItem(row_position, 0, pos_item)
+
+        # Type ComboBox
+        type_combo = QComboBox()
+        type_combo.addItems(["Simple List", "Built-in List"]) # AI later
+        self.payload_sets_table.setCellWidget(row_position, 1, type_combo)
+
+        # Options Button (placeholder)
+        options_btn = QPushButton("Configure")
+        self.payload_sets_table.setCellWidget(row_position, 2, options_btn)
+
+        # Count Label (static)
+        count_item = QTableWidgetItem("0")
+        count_item.setFlags(count_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+        self.payload_sets_table.setItem(row_position, 3, count_item)
+
+        # Connect signals for this new row
+        type_combo.currentIndexChanged.connect(
+            lambda index, r=row_position, p=position: self.on_payload_type_changed(index, r, p)
+        )
+        # options_btn.clicked.connect(...) # To be implemented later
+
+    def on_payload_type_changed(self, combo_index, table_row, position):
+        # A simplified logic for now
+        payload_type = self.payload_sets_table.cellWidget(table_row, 1).currentText()
+
+        if payload_type == "Simple List":
+            # In a full UI, a dialog would ask for the list. Here, we use a default.
+            payloads = ["simple_payload_1", "simple_payload_2"]
+            self.payload_data[str(position)] = payloads
+        elif payload_type == "Built-in List":
+            # Use the first available list as a default
+            available_lists = self.payload_manager.get_available_lists()
+            if available_lists:
+                payloads = self.payload_manager.load_payload_list(available_lists[0])
+                self.payload_data[str(position)] = payloads
+            else:
+                payloads = []
+
+        self.payload_sets_table.item(table_row, 3).setText(str(len(payloads)))
 
     def load_builtin_payload_lists(self):
         """Loads the list of available payload files into the UI."""
@@ -196,38 +212,19 @@ class RaiderTab(QWidget):
     def start_attack(self):
         template = self.request_editor.toPlainText()
         if not re.search(r"§\d+§", template):
-            # No numbered markers found, do nothing.
             return
 
-        # For now, we only support a single payload list, which will be used
-        # for all injection point sets (e.g., for Sniper and Battering Ram).
-        payloads = []
-        current_tab_index = self.payload_tabs.currentIndex()
-        if self.payload_tabs.tabText(current_tab_index) == "Simple List":
-            payloads = self.payload_list_editor.toPlainText().splitlines()
-        elif self.payload_tabs.tabText(current_tab_index) == "Built-in Lists":
-            selected_item = self.builtin_payloads_list.currentItem()
-            if selected_item:
-                list_name = selected_item.text()
-                payloads = self.payload_manager.load_payload_list(list_name)
-        elif self.payload_tabs.tabText(current_tab_index) == "AI Generated":
-            payloads = self.ai_payloads_editor.toPlainText().splitlines()
-
-        if not payloads:
+        if not self.payload_data:
+            # Add a message to the user here in a real app
             return
 
-        # The payload dictionary maps position number to payload list.
-        # For now, we assign the single list to key "1" for Sniper/Battering Ram.
-        # A full UI would manage multiple lists for Pitchfork/Cluster Bomb.
-        payload_dict = {"1": payloads}
         attack_type = self.attack_type_combo.currentText()
 
         self.results_table.setRowCount(0)
-        self.marker_positions = 0 # Reset for the next time
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
 
-        self.raider_manager = RaiderManager(template, payload_dict, attack_type)
+        self.raider_manager = RaiderManager(template, self.payload_data, attack_type)
         self.raider_manager.request_completed.connect(self.add_result_to_table)
         self.raider_manager.fuzzing_finished.connect(self.fuzzing_finished)
         self.raider_manager.log_message.connect(self.log_message) # Connect log

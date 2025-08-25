@@ -21,7 +21,7 @@ class TestRaiderCore(unittest.TestCase):
         self.results = []
         manager.request_completed.connect(lambda r: self.results.append(r))
 
-    @patch('galdr.raider.raider_core.RaiderManager._send_request', new_callable=AsyncMock)
+    @patch('galdr.raider.raider_core.RaiderManager._send_fuzzed_request', new_callable=AsyncMock)
     def test_sniper_attack(self, mock_send_request):
         # Arrange
         mock_send_request.return_value = {"status": 200, "length": 10, "time_sec": 0.1}
@@ -33,12 +33,13 @@ class TestRaiderCore(unittest.TestCase):
 
         # Assert
         self.assertEqual(mock_send_request.call_count, 4)
+        mock_send_request.assert_any_call(unittest.mock.ANY, "http://test.com?p1=§1§&p2=a2")
         mock_send_request.assert_any_call(unittest.mock.ANY, "http://test.com?p1=a1&p2=§2§")
         mock_send_request.assert_any_call(unittest.mock.ANY, "http://test.com?p1=a2&p2=§2§")
         mock_send_request.assert_any_call(unittest.mock.ANY, "http://test.com?p1=§1§&p2=a1")
-        mock_send_request.assert_any_call(unittest.mock.ANY, "http://test.com?p1=§1§&p2=a2")
 
-    @patch('galdr.raider.raider_core.RaiderManager._send_request', new_callable=AsyncMock)
+
+    @patch('galdr.raider.raider_core.RaiderManager._send_fuzzed_request', new_callable=AsyncMock)
     def test_battering_ram_attack(self, mock_send_request):
         # Arrange
         mock_send_request.return_value = {"status": 200, "length": 10, "time_sec": 0.1}
@@ -53,7 +54,7 @@ class TestRaiderCore(unittest.TestCase):
         mock_send_request.assert_any_call(unittest.mock.ANY, "http://test.com?p1=a1&p2=a1")
         mock_send_request.assert_any_call(unittest.mock.ANY, "http://test.com?p1=a2&p2=a2")
 
-    @patch('galdr.raider.raider_core.RaiderManager._send_request', new_callable=AsyncMock)
+    @patch('galdr.raider.raider_core.RaiderManager._send_fuzzed_request', new_callable=AsyncMock)
     def test_pitchfork_attack(self, mock_send_request):
         # Arrange
         mock_send_request.return_value = {"status": 200, "length": 10, "time_sec": 0.1}
@@ -68,7 +69,7 @@ class TestRaiderCore(unittest.TestCase):
         mock_send_request.assert_any_call(unittest.mock.ANY, "http://test.com?p1=a1&p2=b1")
         mock_send_request.assert_any_call(unittest.mock.ANY, "http://test.com?p1=a2&p2=b2")
 
-    @patch('galdr.raider.raider_core.RaiderManager._send_request', new_callable=AsyncMock)
+    @patch('galdr.raider.raider_core.RaiderManager._send_fuzzed_request', new_callable=AsyncMock)
     def test_cluster_bomb_attack(self, mock_send_request):
         # Arrange
         mock_send_request.return_value = {"status": 200, "length": 10, "time_sec": 0.1}
