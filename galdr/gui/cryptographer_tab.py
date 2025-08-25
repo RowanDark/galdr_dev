@@ -41,6 +41,41 @@ class CryptographerTab(QWidget):
         controls_layout.addWidget(self.base64_decode_btn)
         controls_layout.addSpacing(20)
 
+        # Other Bases
+        other_bases_group = QGroupBox("Other Bases")
+        other_bases_layout = QVBoxLayout(other_bases_group)
+
+        b32_layout = QHBoxLayout()
+        self.b32_encode_btn = QPushButton("B32 Enc")
+        self.b32_decode_btn = QPushButton("B32 Dec")
+        b32_layout.addWidget(self.b32_encode_btn)
+        b32_layout.addWidget(self.b32_decode_btn)
+        other_bases_layout.addLayout(b32_layout)
+
+        b45_layout = QHBoxLayout()
+        self.b45_encode_btn = QPushButton("B45 Enc")
+        self.b45_decode_btn = QPushButton("B45 Dec")
+        b45_layout.addWidget(self.b45_encode_btn)
+        b45_layout.addWidget(self.b45_decode_btn)
+        other_bases_layout.addLayout(b45_layout)
+
+        b58_layout = QHBoxLayout()
+        self.b58_encode_btn = QPushButton("B58 Enc")
+        self.b58_decode_btn = QPushButton("B58 Dec")
+        b58_layout.addWidget(self.b58_encode_btn)
+        b58_layout.addWidget(self.b58_decode_btn)
+        other_bases_layout.addLayout(b58_layout)
+
+        b85_layout = QHBoxLayout()
+        self.b85_encode_btn = QPushButton("B85 Enc")
+        self.b85_decode_btn = QPushButton("B85 Dec")
+        b85_layout.addWidget(self.b85_encode_btn)
+        b85_layout.addWidget(self.b85_decode_btn)
+        other_bases_layout.addLayout(b85_layout)
+
+        controls_layout.addWidget(other_bases_group)
+        controls_layout.addSpacing(20)
+
         # HTML
         self.html_encode_btn = QPushButton("HTML Encode ->")
         self.html_decode_btn = QPushButton("<- HTML Decode")
@@ -53,6 +88,37 @@ class CryptographerTab(QWidget):
         self.hex_decode_btn = QPushButton("<- Hex Decode")
         controls_layout.addWidget(self.hex_encode_btn)
         controls_layout.addWidget(self.hex_decode_btn)
+        controls_layout.addSpacing(20)
+
+        # Number Systems
+        num_sys_group = QGroupBox("Number Systems")
+        num_sys_layout = QVBoxLayout(num_sys_group)
+        self.bin_btn = QPushButton("To Binary")
+        self.oct_btn = QPushButton("To Octal")
+        self.dec_btn = QPushButton("To Decimal")
+        self.text_btn = QPushButton("To Text")
+        num_sys_layout.addWidget(self.bin_btn)
+        num_sys_layout.addWidget(self.oct_btn)
+        num_sys_layout.addWidget(self.dec_btn)
+        num_sys_layout.addWidget(self.text_btn)
+        controls_layout.addWidget(num_sys_group)
+        controls_layout.addSpacing(20)
+
+        # Simple Ciphers
+        cipher_group = QGroupBox("Simple Ciphers")
+        cipher_layout = QVBoxLayout(cipher_group)
+        self.rot13_btn = QPushButton("ROT13")
+        cipher_layout.addWidget(self.rot13_btn)
+
+        xor_layout = QHBoxLayout()
+        self.xor_key_input = QLineEdit()
+        self.xor_key_input.setPlaceholderText("XOR Key")
+        self.xor_btn = QPushButton("XOR")
+        xor_layout.addWidget(self.xor_key_input)
+        xor_layout.addWidget(self.xor_btn)
+        cipher_layout.addLayout(xor_layout)
+
+        controls_layout.addWidget(cipher_group)
 
         main_layout.addWidget(controls_widget)
 
@@ -131,11 +197,30 @@ class CryptographerTab(QWidget):
         self.base64_encode_btn.clicked.connect(lambda: self.transform_text(CryptoUtils.base64_encode))
         self.base64_decode_btn.clicked.connect(lambda: self.transform_text(CryptoUtils.base64_decode, reverse=True))
 
+        self.b32_encode_btn.clicked.connect(lambda: self.transform_text(CryptoUtils.base32_encode))
+        self.b32_decode_btn.clicked.connect(lambda: self.transform_text(CryptoUtils.base32_decode, reverse=True))
+        self.b45_encode_btn.clicked.connect(lambda: self.transform_text(CryptoUtils.base45_encode))
+        self.b45_decode_btn.clicked.connect(lambda: self.transform_text(CryptoUtils.base45_decode, reverse=True))
+        self.b58_encode_btn.clicked.connect(lambda: self.transform_text(CryptoUtils.base58_encode))
+        self.b58_decode_btn.clicked.connect(lambda: self.transform_text(CryptoUtils.base58_decode, reverse=True))
+        self.b85_encode_btn.clicked.connect(lambda: self.transform_text(CryptoUtils.base85_encode))
+        self.b85_decode_btn.clicked.connect(lambda: self.transform_text(CryptoUtils.base85_decode, reverse=True))
+
         self.html_encode_btn.clicked.connect(lambda: self.transform_text(CryptoUtils.html_encode))
         self.html_decode_btn.clicked.connect(lambda: self.transform_text(CryptoUtils.html_decode, reverse=True))
 
         self.hex_encode_btn.clicked.connect(lambda: self.transform_text(CryptoUtils.hex_encode))
         self.hex_decode_btn.clicked.connect(lambda: self.transform_text(CryptoUtils.hex_decode, reverse=True))
+
+        # Number system signals
+        self.bin_btn.clicked.connect(lambda: self.transform_text(CryptoUtils.text_to_binary))
+        self.oct_btn.clicked.connect(lambda: self.transform_text(CryptoUtils.text_to_octal))
+        self.dec_btn.clicked.connect(lambda: self.transform_text(CryptoUtils.text_to_decimal))
+        self.text_btn.clicked.connect(self.convert_from_number_system)
+
+        # Simple Cipher signals
+        self.rot13_btn.clicked.connect(lambda: self.transform_text(CryptoUtils.rot13))
+        self.xor_btn.clicked.connect(self.transform_xor)
 
         # JWT signals
         self.jwt_input_editor.textChanged.connect(self.on_jwt_input_changed)
@@ -170,6 +255,40 @@ class CryptographerTab(QWidget):
 
         result = CryptoUtils.verify_jwt_signature(token, secret)
         self.jwt_status_label.setText(f"Status: {result}")
+
+    def convert_from_number_system(self):
+        # This is a heuristic. It tries to decode from each format.
+        # A better UI would make this more explicit.
+        input_text = self.input_editor.toPlainText()
+
+        # Try binary first
+        result = CryptoUtils.binary_to_text(input_text)
+        if not result.startswith("Error:"):
+            self.output_editor.setPlainText(result)
+            return
+
+        # Try octal
+        result = CryptoUtils.octal_to_text(input_text)
+        if not result.startswith("Error:"):
+            self.output_editor.setPlainText(result)
+            return
+
+        # Try decimal
+        result = CryptoUtils.decimal_to_text(input_text)
+        if not result.startswith("Error:"):
+            self.output_editor.setPlainText(result)
+            return
+
+        self.output_editor.setPlainText("Error: Could not decode from Binary, Octal, or Decimal.")
+
+    def transform_xor(self):
+        input_text = self.input_editor.toPlainText()
+        key = self.xor_key_input.text()
+        # Note: Since XORing with the same key decrypts, we can use the same function.
+        # But our XOR function returns hex. We need a way to detect and decode hex first.
+        # For simplicity, we'll assume the input is always plain text for now.
+        output_text = CryptoUtils.xor(input_text, key)
+        self.output_editor.setPlainText(output_text)
 
     def transform_text(self, func, reverse=False):
         if not reverse:

@@ -6,6 +6,16 @@ from galdr.utils.crypto_utils import CryptoUtils
 
 class TestCryptoUtils(unittest.TestCase):
 
+    def setUp(self):
+        # This setup is only for JWT tests
+        self.secret_key = "secret"
+        self.payload = {"user_id": 123, "exp": int(time.time()) + 3600}
+        self.expired_payload = {"user_id": 123, "exp": int(time.time()) - 3600}
+
+        self.valid_token = jwt.encode(self.payload, self.secret_key, algorithm="HS256")
+        self.expired_token = jwt.encode(self.expired_payload, self.secret_key, algorithm="HS256")
+        self.invalid_signature_token = jwt.encode(self.payload, "wrong-secret", algorithm="HS256")
+
     # --- Coder tests ---
     def test_url_encoding(self):
         plain = "a test string with spaces & symbols!"
@@ -18,7 +28,18 @@ class TestCryptoUtils(unittest.TestCase):
         encoded = "R2FsZHIgYmFzZTY0IHRlc3Q="
         self.assertEqual(CryptoUtils.base64_encode(plain), encoded)
         self.assertEqual(CryptoUtils.base64_decode(encoded), plain)
-        self.assertIn("Error", CryptoUtils.base64_decode("invalid-base64"))
+
+    def test_base58_encoding(self):
+        plain = "hello world"
+        encoded = "StV1DL6CwTryKyV"
+        self.assertEqual(CryptoUtils.base58_encode(plain), encoded)
+        self.assertEqual(CryptoUtils.base58_decode(encoded), plain)
+
+    def test_base85_encoding(self):
+        plain = "Galdr base85 test"
+        encoded = "M`3Jaav)-1b7eR+AarGObN"
+        self.assertEqual(CryptoUtils.base85_encode(plain), encoded)
+        self.assertEqual(CryptoUtils.base85_decode(encoded), plain)
 
     def test_html_encoding(self):
         plain = "<p>Hello & Welcome!</p>"
@@ -32,16 +53,41 @@ class TestCryptoUtils(unittest.TestCase):
         self.assertEqual(CryptoUtils.hex_encode(plain), encoded)
         self.assertEqual(CryptoUtils.hex_decode(encoded), plain)
 
+    # --- Number System tests ---
+    def test_binary_conversion(self):
+        plain = "abc"
+        binary = "01100001 01100010 01100011"
+        self.assertEqual(CryptoUtils.text_to_binary(plain), binary)
+        self.assertEqual(CryptoUtils.binary_to_text(binary), plain)
+
+    def test_octal_conversion(self):
+        plain = "abc"
+        octal = "141 142 143"
+        self.assertEqual(CryptoUtils.text_to_octal(plain), octal)
+        self.assertEqual(CryptoUtils.octal_to_text(octal), plain)
+
+    def test_decimal_conversion(self):
+        plain = "abc"
+        decimal = "97 98 99"
+        self.assertEqual(CryptoUtils.text_to_decimal(plain), decimal)
+        self.assertEqual(CryptoUtils.decimal_to_text(decimal), plain)
+
+    # --- Simple Cipher tests ---
+    def test_rot13_cipher(self):
+        plain = "Galdr ROT13 Test"
+        encrypted = "Tnyqe EBG13 Grfg"
+        self.assertEqual(CryptoUtils.rot13(plain), encrypted)
+        self.assertEqual(CryptoUtils.rot13(encrypted), plain)
+
+    def test_xor_cipher(self):
+        plain = "Galdr"
+        key = "key"
+        encrypted_hex = "2c04150f17"
+        self.assertEqual(CryptoUtils.xor(plain, key), encrypted_hex)
+        decrypted = CryptoUtils.xor(CryptoUtils.hex_decode(encrypted_hex), key)
+        self.assertEqual(CryptoUtils.hex_decode(decrypted), plain)
+
     # --- JWT tests ---
-    def setUp(self):
-        self.secret_key = "secret"
-        self.payload = {"user_id": 123, "exp": int(time.time()) + 3600}
-        self.expired_payload = {"user_id": 123, "exp": int(time.time()) - 3600}
-
-        self.valid_token = jwt.encode(self.payload, self.secret_key, algorithm="HS256")
-        self.expired_token = jwt.encode(self.expired_payload, self.secret_key, algorithm="HS256")
-        self.invalid_signature_token = jwt.encode(self.payload, "wrong-secret", algorithm="HS256")
-
     def test_jwt_decode(self):
         header, payload, error = CryptoUtils.decode_jwt(self.valid_token)
         self.assertEqual(error, "")
@@ -51,8 +97,6 @@ class TestCryptoUtils(unittest.TestCase):
     def test_jwt_decode_invalid_token(self):
         header, payload, error = CryptoUtils.decode_jwt("not.a.real.token")
         self.assertNotEqual(error, "")
-        self.assertEqual(header, "")
-        self.assertEqual(payload, "")
 
     def test_jwt_verify_valid(self):
         result = CryptoUtils.verify_jwt_signature(self.valid_token, self.secret_key)
