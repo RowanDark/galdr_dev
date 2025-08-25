@@ -23,6 +23,7 @@ from gui.scanner_tab import ScannerTab
 from gui.proxy_tab import ProxyTab
 from gui.raider_tab import RaiderTab
 from gui.subdomain_tab import SubdomainTab
+from gui.coder_tab import CoderTab
 from core.project_manager import ScanSettings, UserPreferences
 
 class MainWindow(QMainWindow):
@@ -226,6 +227,10 @@ class MainWindow(QMainWindow):
         # Raider (Fuzzer) Tab
         self.raider_tab = RaiderTab(self)
         self.tab_widget.addTab(self.raider_tab, "💥 Raider")
+
+        # Coder Tab
+        self.coder_tab = CoderTab()
+        self.tab_widget.addTab(self.coder_tab, "🧑‍💻 Coder")
 
         # AI Settings tab
         self.ai_settings_panel = AISettingsPanel()
