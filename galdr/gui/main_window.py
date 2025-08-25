@@ -22,6 +22,7 @@ from gui.ai_copilot_tab import AICoPilotTab
 from gui.scanner_tab import ScannerTab
 from gui.proxy_tab import ProxyTab
 from gui.raider_tab import RaiderTab
+from gui.subdomain_tab import SubdomainTab
 from core.project_manager import ScanSettings, UserPreferences
 
 class MainWindow(QMainWindow):
@@ -182,6 +183,10 @@ class MainWindow(QMainWindow):
         # Crawler tab
         self.init_crawler_tab()
         
+        # Subdomains Tab
+        self.subdomain_tab = SubdomainTab()
+        self.tab_widget.addTab(self.subdomain_tab, "🌐 Subdomains")
+
         # Results tab
         self.init_results_tab()
         
